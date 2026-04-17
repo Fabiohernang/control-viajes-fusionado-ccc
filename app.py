@@ -1375,6 +1375,39 @@ def ccc_month_summary(year, month):
         "suspendibles": suspendibles,
         "al_dia": al_dia,
     }
+
+def ccc_get_message_template():
+    item = db.session.get(AppConfig, "ccc_message_template")
+    if item and (item.value or "").strip():
+        return item.value
+
+    return """Buenos días,
+
+Adjuntamos el resumen de cuenta corriente.
+
+Recordamos que el plazo de vencimiento es hasta el día {VENCIMIENTO}.
+
+Muchas gracias.
+Saludos."""
+
+
+def ccc_set_message_template(texto):
+    texto = (texto or "").strip()
+
+    item = db.session.get(AppConfig, "ccc_message_template")
+    if not item:
+        item = AppConfig(key="ccc_message_template", value=texto)
+        db.session.add(item)
+    else:
+        item.value = texto
+
+    db.session.commit()
+
+
+def ccc_format_message(vencimiento_texto=None):
+    plantilla = ccc_get_message_template()
+    vencimiento_texto = (vencimiento_texto or "").strip() or "[COMPLETAR]"
+    return plantilla.replace("{VENCIMIENTO}", vencimiento_texto)
 def login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
@@ -3170,6 +3203,32 @@ def ccc_stats():
         "con_mora": con_mora,
         "al_dia": al_dia,
         "total_mora": float(quantize_money(total_mora)),
+    })
+    @app.route("/api/ccc/mensaje", methods=["GET"])
+@login_required
+def ccc_get_message():
+    vencimiento = (request.args.get("vencimiento") or "").strip()
+
+    return jsonify({
+        "template": ccc_get_message_template(),
+        "preview": ccc_format_message(vencimiento),
+    })
+
+
+@app.route("/api/ccc/mensaje", methods=["POST"])
+@login_required
+def ccc_save_message():
+    data = request.get_json(silent=True) or {}
+    texto = (data.get("mensaje") or "").strip()
+
+    if not texto:
+        return jsonify({"ok": False, "error": "El mensaje no puede quedar vacío."}), 400
+
+    ccc_set_message_template(texto)
+
+    return jsonify({
+        "ok": True,
+        "template": texto,
     })
 @app.route("/api/ccc/mensaje", methods=["GET"])
 @login_required
