@@ -929,6 +929,188 @@ def ccc_parse_date(value):
     return None
 
 
+def ccc_block_due_date(fecha_mov):
+    if not fecha_mov:
+        return None
+
+    dia = fecha_mov.day
+
+    if 1 <= dia <= 7:
+        return fecha_mov.replace(day=9)
+
+    if 8 <= dia <= 15:
+        return fecha_mov.replace(day=17)
+
+    if 16 <= dia <= 22:
+        return fecha_mov.replace(day=24)
+
+    # 23 al 31 -> día 2 del mes siguiente
+    if fecha_mov.month == 12:
+        return date(fecha_mov.year + 1, 1, 2)
+    return date(fecha_mov.year, fecha_mov.month + 1, 2)
+
+
+def ccc_rules_for_tipo(tipo):
+    tipo = (tipo or "clientes").strip().lower()
+
+    if tipo == "clientes":
+        return {"aviso": True, "mora": True, "suspension": True}
+
+    if tipo == "socios":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    if tipo == "orden":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    if tipo == "telefonos":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    return {"aviso": True, "mora": True, "suspension": True}
+
+
+def ccc_calc_coef(dias_vencidos, tasa_mensual=Decimal("0.07")):
+    if dias_vencidos <= 0:
+        return Decimal("0")
+    # Fórmula EXACTA del Excel:
+    # =POTENCIA(((tasa/30)+1);dias)-1
+    return (((tasa_mensual / Decimal("30")) + Decimal("1")) ** Decimal(dias_vencidos)) - Decimal("1")
+
+
+def ccc_calc_mora(monto, dias_vencidos, tasa_mensual=Decimal("0.07")):
+    monto = to_decimal(monto)
+    if monto <= 0 or dias_vencidos <= 0:
+        return {
+            "coeficiente": Decimal("0"),
+            "interes": Decimal("0"),
+            "iva": Decimal("0"),
+            "total": Decimal("0"),
+        }
+
+    coef = ccc_calc_coef(dias_vencidos, tasa_mensual)
+    interes = quantize_money(monto * coef)
+    iva = quantize_money(interes * Decimal("0.21"))
+    total = quantize_money(interes + iva)
+
+    return {
+        "coeficiente": coef,
+        "interes": interes,
+        "iva": iva,
+        "total": total,
+    }
+
+
+def ccc_estado_para_bloque(tipo, fecha_vto, fecha_ref):
+    if not fecha_vto:
+        return "sin_vencimiento"
+
+    dias = (fecha_ref - fecha_vto).days
+    reglas = ccc_rules_for_tipo(tipo)
+
+    if dias < 0:
+        return "al_dia"
+
+    if dias == 0:
+        return "vence_hoy"
+
+    # Día 3 -> avisar
+    if dias >= 3 and reglas["aviso"]:
+        if reglas["suspension"] and dias >= 4:
+            return "suspender"
+        if reglas["mora"]:
+            return "avisar"
+        return "avisar"
+
+    # Clientes: si pasó el vto pero todavía no llegó al aviso, muestra con mora
+    if dias > 0 and reglas["mora"]:
+        return "con_mora"
+
+    return "pendiente"
+
+
+def ccc_build_blocks_for_cuenta(cuenta, fecha_ref=None):
+    if fecha_ref is None:
+        fecha_ref = date.today()
+
+    movimientos = (
+        CCCMovimiento.query
+        .filter_by(cuenta_codigo=cuenta.codigo)
+        .order_by(CCCMovimiento.id.asc())
+        .all()
+    )
+
+    bloques = {}
+    pagos = []
+
+    for m in movimientos:
+        fecha_mov = ccc_parse_date(m.fecha)
+        if not fecha_mov:
+            continue
+
+        tipo_mov = (m.tipo or "").strip().upper()
+        debe = to_decimal(m.debe)
+        haber = to_decimal(m.haber)
+
+        # pagos/recibos
+        if haber > 0:
+            pagos.append(haber)
+            continue
+
+        # solo deuda real
+        if debe <= 0:
+            continue
+
+        # ignorar NDA para el cálculo base del panel
+        if tipo_mov == "NDA":
+            continue
+
+        fecha_vto = ccc_block_due_date(fecha_mov)
+        if not fecha_vto:
+            continue
+
+        key = fecha_vto.isoformat()
+
+        if key not in bloques:
+            bloques[key] = {
+                "fecha_vto": fecha_vto,
+                "monto": Decimal("0"),
+                "movimientos": [],
+            }
+
+        bloques[key]["monto"] += debe
+        bloques[key]["movimientos"].append(m)
+
+    # aplicar pagos FIFO por bloque vencimiento más viejo primero
+    bloques_ordenados = sorted(bloques.values(), key=lambda x: x["fecha_vto"])
+    total_pago = sum(pagos, Decimal("0"))
+
+    for b in bloques_ordenados:
+        monto = b["monto"]
+        aplicado = min(monto, total_pago) if total_pago > 0 else Decimal("0")
+        pendiente = monto - aplicado
+        total_pago -= aplicado
+
+        dias = max((fecha_ref - b["fecha_vto"]).days, 0)
+        reglas = ccc_rules_for_tipo(cuenta.tipo)
+
+        mora = {"coeficiente": Decimal("0"), "interes": Decimal("0"), "iva": Decimal("0"), "total": Decimal("0")}
+        if pendiente > 0 and reglas["mora"] and dias > 0:
+            mora = ccc_calc_mora(pendiente, dias)
+
+        b["aplicado"] = quantize_money(aplicado)
+        b["pendiente"] = quantize_money(pendiente)
+        b["dias"] = dias
+        b["estado"] = ccc_estado_para_bloque(cuenta.tipo, b["fecha_vto"], fecha_ref) if pendiente > 0 else "saldado"
+        b["coeficiente"] = float(mora["coeficiente"])
+        b["interes"] = float(mora["interes"])
+        b["iva"] = float(mora["iva"])
+        b["total_mora"] = float(mora["total"])
+        b["monto"] = float(quantize_money(monto))
+        b["aplicado_float"] = float(b["aplicado"])
+        b["pendiente_float"] = float(b["pendiente"])
+
+    return bloques_ordenados
+
+
 def ccc_month_summary(year, month):
     movimientos = CCCMovimiento.query.all()
     cuentas = {c.codigo: c for c in CCCCuenta.query.all()}
@@ -962,12 +1144,44 @@ def ccc_month_summary(year, month):
 
     pendiente = Decimal("0")
     pendiente_combustible = Decimal("0")
+    mora_total = Decimal("0")
+    iva_mora_total = Decimal("0")
+    avisos = 0
+    suspendibles = 0
+    al_dia = 0
+
+    fecha_ref = date(year, month, 1)
+    if year == date.today().year and month == date.today().month:
+        fecha_ref = date.today()
+    else:
+        # último día del mes
+        if month == 12:
+            fecha_ref = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            fecha_ref = date(year, month + 1, 1) - timedelta(days=1)
+
     for c in cuentas.values():
         saldo = to_decimal(c.saldo)
         if saldo > 0:
             pendiente += saldo
             if (c.tipo or "clientes") in {"clientes", "orden"}:
                 pendiente_combustible += saldo
+
+        bloques = ccc_build_blocks_for_cuenta(c, fecha_ref=fecha_ref)
+        tiene_abierto = False
+
+        for b in bloques:
+            if b["pendiente"] > 0:
+                tiene_abierto = True
+                mora_total += Decimal(str(b["interes"]))
+                iva_mora_total += Decimal(str(b["iva"]))
+                if b["estado"] == "avisar":
+                    avisos += 1
+                if b["estado"] == "suspender":
+                    suspendibles += 1
+
+        if not tiene_abierto:
+            al_dia += 1
 
     return {
         "facturado": float(quantize_money(facturado)),
@@ -976,6 +1190,11 @@ def ccc_month_summary(year, month):
         "combustible_facturado": float(quantize_money(combustible_facturado)),
         "combustible_cobrado": float(quantize_money(combustible_cobrado)),
         "combustible_pendiente": float(quantize_money(pendiente_combustible)),
+        "mora_total": float(quantize_money(mora_total)),
+        "iva_mora_total": float(quantize_money(iva_mora_total)),
+        "avisos": avisos,
+        "suspendibles": suspendibles,
+        "al_dia": al_dia,
     }
 
 def login_required(view_func):
