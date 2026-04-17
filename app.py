@@ -3204,6 +3204,7 @@ def ccc_stats():
         "al_dia": al_dia,
         "total_mora": float(quantize_money(total_mora)),
     })
+    
     @app.route("/api/ccc/mensaje", methods=["GET"])
 @login_required
 def ccc_get_message():
@@ -3230,6 +3231,7 @@ def ccc_save_message():
         "ok": True,
         "template": texto,
     })
+    
 @app.route("/api/ccc/mensaje", methods=["POST"])
 @login_required
 def ccc_save_message():
