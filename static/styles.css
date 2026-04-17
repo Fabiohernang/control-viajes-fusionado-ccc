@@ -158,3 +158,112 @@ body {
   color: #243746;
   border-color: #d5dde3;
 }
+
+
+/* REDISEÑO HEADER */
+body.portal-body {
+  background: #edf2f7;
+  color: #17212b;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.top-shell {
+  background: linear-gradient(90deg, #0f1720 0%, #182634 55%, #1f3142 100%);
+  box-shadow: 0 10px 28px rgba(9, 18, 28, 0.24);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.top-shell-main {
+  padding: 10px 18px;
+}
+
+.brand-link {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.brand-link:hover,
+.brand-link:focus,
+.brand-link:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-title-top {
+  color: #f8fbff;
+  font-weight: 700;
+  font-size: 0.98rem;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.brand-subtitle-top {
+  color: rgba(232, 241, 248, 0.82);
+  font-size: 0.84rem;
+  line-height: 1.15;
+}
+
+.brand-logo-top {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 6px 18px rgba(255,255,255,0.18);
+}
+
+.primary-nav {
+  gap: 10px;
+  padding: 0 16px 12px;
+}
+
+.primary-nav-btn {
+  font-size: 0.95rem;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.top-actions .btn {
+  border-radius: 10px;
+}
+
+.portal-main {
+  padding: 18px 0 28px;
+}
+
+.portal-content {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .top-shell-main {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .brand-title-top {
+    font-size: 0.9rem;
+  }
+
+  .brand-subtitle-top {
+    font-size: 0.78rem;
+  }
+
+  .primary-nav {
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+}
