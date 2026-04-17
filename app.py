@@ -390,6 +390,7 @@ class CCCPeriodo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha_carga = db.Column(db.Date, nullable=False, default=date.today)
     archivo = db.Column(db.String(255), nullable=False, default="")
+    sector = db.Column(db.String(50), nullable=False, default="clientes", index=True)
     usuario = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -402,7 +403,7 @@ class CCCCuenta(db.Model):
     nombre = db.Column(db.String(255), nullable=False, default="")
     domicilio = db.Column(db.String(255), nullable=True)
     localidad = db.Column(db.String(255), nullable=True)
-    tipo = db.Column(db.String(50), nullable=False, default="clientes")  # clientes, socios, orden, telefonos
+    tipo = db.Column(db.String(50), nullable=False, default="clientes")  # clientes, orden_externos, orden_socios, socios_particulares, telefonos
     saldo = db.Column(db.Numeric(14, 2), nullable=False, default=0)
     estado_manual = db.Column(db.String(50), nullable=True)
     obs_manual = db.Column(db.Text, nullable=True)
@@ -424,6 +425,7 @@ class CCCMovimiento(db.Model):
     haber = db.Column(db.Numeric(14, 2), nullable=False, default=0)
     saldo = db.Column(db.Numeric(14, 2), nullable=False, default=0)
     periodo_id = db.Column(db.Integer, db.ForeignKey("ccc_periodos.id"), nullable=True)
+    sector = db.Column(db.String(50), nullable=False, default="clientes", index=True)
 
     cuenta = db.relationship("CCCCuenta", backref=db.backref("movimientos_rel", lazy="dynamic"))
     periodo = db.relationship("CCCPeriodo", backref=db.backref("movimientos_rel", lazy="dynamic"))
@@ -652,6 +654,15 @@ def ensure_schema():
             conn.execute(text("""
                 ALTER TABLE liquidacion_pagos
                 ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+            """))
+
+            conn.execute(text("""
+                ALTER TABLE ccc_periodos
+                ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NOT NULL DEFAULT 'clientes'
+            """))
+            conn.execute(text("""
+                ALTER TABLE ccc_movimientos
+                ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NOT NULL DEFAULT 'clientes'
             """))
 
 
@@ -964,6 +975,20 @@ def ccc_rules_for_tipo(tipo):
     if tipo == "clientes":
         return {"aviso": True, "mora": True, "suspension": True}
 
+    if tipo == "orden_externos":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    if tipo == "orden_socios":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    if tipo == "socios_particulares":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    if tipo == "telefonos":
+        return {"aviso": True, "mora": False, "suspension": False}
+
+    return {"aviso": True, "mora": True, "suspension": True}
+
     if tipo == "socios":
         return {"aviso": True, "mora": False, "suspension": False}
 
@@ -1119,179 +1144,6 @@ def ccc_build_blocks_for_cuenta(cuenta, fecha_ref=None):
     return bloques_ordenados
 
 
-def ccc_block_due_date(fecha_mov):
-    if not fecha_mov:
-        return None
-
-    dia = fecha_mov.day
-
-    if 1 <= dia <= 7:
-        return fecha_mov.replace(day=9)
-
-    if 8 <= dia <= 15:
-        return fecha_mov.replace(day=17)
-
-    if 16 <= dia <= 22:
-        return fecha_mov.replace(day=24)
-
-    if fecha_mov.month == 12:
-        return date(fecha_mov.year + 1, 1, 2)
-    return date(fecha_mov.year, fecha_mov.month + 1, 2)
-
-
-def ccc_rules_for_tipo(tipo):
-    tipo = (tipo or "clientes").strip().lower()
-
-    if tipo == "clientes":
-        return {"aviso": True, "mora": True, "suspension": True}
-
-    if tipo == "socios":
-        return {"aviso": True, "mora": False, "suspension": False}
-
-    if tipo == "orden":
-        return {"aviso": True, "mora": False, "suspension": False}
-
-    if tipo == "telefonos":
-        return {"aviso": True, "mora": False, "suspension": False}
-
-    return {"aviso": True, "mora": True, "suspension": True}
-
-
-def ccc_calc_coef(dias_vencidos, tasa_mensual=Decimal("0.07")):
-    if dias_vencidos <= 0:
-        return Decimal("0")
-    return (((tasa_mensual / Decimal("30")) + Decimal("1")) ** Decimal(dias_vencidos)) - Decimal("1")
-
-
-def ccc_calc_mora(monto, dias_vencidos, tasa_mensual=Decimal("0.07")):
-    monto = to_decimal(monto)
-    if monto <= 0 or dias_vencidos <= 0:
-        return {
-            "coeficiente": Decimal("0"),
-            "interes": Decimal("0"),
-            "iva": Decimal("0"),
-            "total": Decimal("0"),
-        }
-
-    coef = ccc_calc_coef(dias_vencidos, tasa_mensual)
-    interes = quantize_money(monto * coef)
-    iva = quantize_money(interes * Decimal("0.21"))
-    total = quantize_money(interes + iva)
-
-    return {
-        "coeficiente": coef,
-        "interes": interes,
-        "iva": iva,
-        "total": total,
-    }
-
-
-def ccc_estado_para_bloque(tipo, fecha_vto, fecha_ref):
-    if not fecha_vto:
-        return "sin_vencimiento"
-
-    dias = (fecha_ref - fecha_vto).days
-    reglas = ccc_rules_for_tipo(tipo)
-
-    if dias < 0:
-        return "al_dia"
-
-    if dias == 0:
-        return "vence_hoy"
-
-    if dias >= 3 and reglas["aviso"]:
-        if reglas["suspension"] and dias >= 4:
-            return "suspender"
-        if reglas["mora"]:
-            return "avisar"
-        return "avisar"
-
-    if dias > 0 and reglas["mora"]:
-        return "con_mora"
-
-    return "pendiente"
-
-
-def ccc_build_blocks_for_cuenta(cuenta, fecha_ref=None):
-    if fecha_ref is None:
-        fecha_ref = date.today()
-
-    movimientos = (
-        CCCMovimiento.query
-        .filter_by(cuenta_codigo=cuenta.codigo)
-        .order_by(CCCMovimiento.id.asc())
-        .all()
-    )
-
-    bloques = {}
-    pagos = []
-
-    for m in movimientos:
-        fecha_mov = ccc_parse_date(m.fecha)
-        if not fecha_mov:
-            continue
-
-        tipo_mov = (m.tipo or "").strip().upper()
-        debe = to_decimal(m.debe)
-        haber = to_decimal(m.haber)
-
-        if haber > 0:
-            pagos.append(haber)
-            continue
-
-        if debe <= 0:
-            continue
-
-        if tipo_mov == "NDA":
-            continue
-
-        fecha_vto = ccc_block_due_date(fecha_mov)
-        if not fecha_vto:
-            continue
-
-        key = fecha_vto.isoformat()
-
-        if key not in bloques:
-            bloques[key] = {
-                "fecha_vto": fecha_vto,
-                "monto": Decimal("0"),
-                "movimientos": [],
-            }
-
-        bloques[key]["monto"] += debe
-        bloques[key]["movimientos"].append(m)
-
-    bloques_ordenados = sorted(bloques.values(), key=lambda x: x["fecha_vto"])
-    total_pago = sum(pagos, Decimal("0"))
-
-    for b in bloques_ordenados:
-        monto = b["monto"]
-        aplicado = min(monto, total_pago) if total_pago > 0 else Decimal("0")
-        pendiente = monto - aplicado
-        total_pago -= aplicado
-
-        dias = max((fecha_ref - b["fecha_vto"]).days, 0)
-        reglas = ccc_rules_for_tipo(cuenta.tipo)
-
-        mora = {"coeficiente": Decimal("0"), "interes": Decimal("0"), "iva": Decimal("0"), "total": Decimal("0")}
-        if pendiente > 0 and reglas["mora"] and dias > 0:
-            mora = ccc_calc_mora(pendiente, dias)
-
-        b["aplicado"] = quantize_money(aplicado)
-        b["pendiente"] = quantize_money(pendiente)
-        b["dias"] = dias
-        b["estado"] = ccc_estado_para_bloque(cuenta.tipo, b["fecha_vto"], fecha_ref) if pendiente > 0 else "saldado"
-        b["coeficiente"] = float(mora["coeficiente"])
-        b["interes"] = float(mora["interes"])
-        b["iva"] = float(mora["iva"])
-        b["total_mora"] = float(mora["total"])
-        b["monto"] = float(quantize_money(monto))
-        b["aplicado_float"] = float(b["aplicado"])
-        b["pendiente_float"] = float(b["pendiente"])
-
-    return bloques_ordenados
-
-
 def ccc_month_summary(year, month):
     movimientos = CCCMovimiento.query.all()
     cuentas = {c.codigo: c for c in CCCCuenta.query.all()}
@@ -1315,12 +1167,12 @@ def ccc_month_summary(year, month):
 
         if tipo in tipos_factura and to_decimal(m.debe) > 0:
             facturado += to_decimal(m.debe)
-            if cuenta_tipo in {"clientes", "orden"}:
+            if cuenta_tipo in {"clientes", "orden_externos", "orden_socios"}:
                 combustible_facturado += to_decimal(m.debe)
 
         if tipo in tipos_cobro and to_decimal(m.haber) > 0:
             cobrado += to_decimal(m.haber)
-            if cuenta_tipo in {"clientes", "orden"}:
+            if cuenta_tipo in {"clientes", "orden_externos", "orden_socios"}:
                 combustible_cobrado += to_decimal(m.haber)
 
     pendiente = Decimal("0")
@@ -1343,7 +1195,7 @@ def ccc_month_summary(year, month):
         saldo = to_decimal(c.saldo)
         if saldo > 0:
             pendiente += saldo
-            if (c.tipo or "clientes") in {"clientes", "orden"}:
+            if (c.tipo or "clientes") in {"clientes", "orden_externos", "orden_socios"}:
                 pendiente_combustible += saldo
 
         bloques = ccc_build_blocks_for_cuenta(c, fecha_ref=fecha_ref)
@@ -2958,20 +2810,36 @@ def ccc_upload():
     data = request.get_json(silent=True) or {}
     cuentas = data.get("cuentas", [])
     archivo = (data.get("archivo") or "desconocido").strip()
+    sector = (data.get("sector") or "clientes").strip().lower()
     usuario = session.get("nombre") or session.get("username") or ""
+
+    sectores_validos = {"clientes", "orden_externos", "orden_socios", "socios_particulares", "telefonos"}
+    if sector not in sectores_validos:
+        return jsonify({"ok": False, "error": "Sector inválido"}), 400
+
+    periodos_anteriores = CCCPeriodo.query.filter_by(sector=sector).all()
+    periodo_ids_anteriores = [p.id for p in periodos_anteriores]
+    if periodo_ids_anteriores:
+        CCCMovimiento.query.filter(CCCMovimiento.periodo_id.in_(periodo_ids_anteriores)).delete(synchronize_session=False)
+        CCCPeriodo.query.filter(CCCPeriodo.id.in_(periodo_ids_anteriores)).delete(synchronize_session=False)
 
     periodo = CCCPeriodo(
         fecha_carga=date.today(),
         archivo=archivo[:255],
+        sector=sector,
         usuario=usuario[:120] if usuario else None,
     )
     db.session.add(periodo)
     db.session.flush()
 
+    codigos_cargados = set()
+
     for c in cuentas:
         codigo = (c.get("codigo") or "").strip()
         if not codigo:
             continue
+
+        codigos_cargados.add(codigo)
 
         cuenta = CCCCuenta.query.filter_by(codigo=codigo).first()
         if not cuenta:
@@ -2981,11 +2849,11 @@ def ccc_upload():
         cuenta.nombre = (c.get("nombre") or "").strip()
         cuenta.domicilio = (c.get("domicilio") or "").strip() or None
         cuenta.localidad = (c.get("localidad") or "").strip() or None
-        cuenta.tipo = (c.get("tipo") or "clientes").strip()[:50]
+        cuenta.tipo = sector
         cuenta.saldo = ccc_decimal(c.get("saldo", 0))
         cuenta.fecha_actualizacion = date.today()
 
-        CCCMovimiento.query.filter_by(cuenta_codigo=codigo).delete()
+        CCCMovimiento.query.filter_by(cuenta_codigo=codigo, sector=sector).delete()
 
         for m in c.get("movimientos", []):
             mov = CCCMovimiento(
@@ -2999,12 +2867,40 @@ def ccc_upload():
                 haber=ccc_decimal(m.get("haber", 0)),
                 saldo=ccc_decimal(m.get("saldo", 0)),
                 periodo_id=periodo.id,
+                sector=sector,
             )
             db.session.add(mov)
 
     db.session.commit()
 
-    return jsonify({"ok": True, "periodo_id": periodo.id, "cuentas": len(cuentas)})
+    return jsonify({"ok": True, "periodo_id": periodo.id, "cuentas": len(codigos_cargados), "sector": sector})
+
+
+
+@app.route("/api/ccc/sector/<sector>", methods=["DELETE"])
+@login_required
+def ccc_delete_sector(sector):
+    sector = (sector or "").strip().lower()
+
+    sectores_validos = {"clientes", "orden_externos", "orden_socios", "socios_particulares", "telefonos"}
+    if sector not in sectores_validos:
+        return jsonify({"ok": False, "error": "Sector inválido"}), 400
+
+    periodos = CCCPeriodo.query.filter_by(sector=sector).all()
+    periodo_ids = [p.id for p in periodos]
+
+    if periodo_ids:
+        CCCMovimiento.query.filter(CCCMovimiento.periodo_id.in_(periodo_ids)).delete(synchronize_session=False)
+        CCCPeriodo.query.filter(CCCPeriodo.id.in_(periodo_ids)).delete(synchronize_session=False)
+
+    cuentas = CCCCuenta.query.filter_by(tipo=sector).all()
+    for cuenta in cuentas:
+        cuenta.saldo = Decimal("0")
+        cuenta.fecha_actualizacion = date.today()
+
+    db.session.commit()
+
+    return jsonify({"ok": True, "sector": sector})
 
 
 @app.route("/api/ccc/cuentas")
