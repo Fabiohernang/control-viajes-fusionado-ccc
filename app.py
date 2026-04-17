@@ -3205,7 +3205,7 @@ def ccc_stats():
         "total_mora": float(quantize_money(total_mora)),
     })
     @app.route("/api/ccc/mensaje", methods=["GET"])
-    @login_required
+@login_required
 def ccc_get_message():
     vencimiento = (request.args.get("vencimiento") or "").strip()
 
@@ -3230,17 +3230,6 @@ def ccc_save_message():
         "ok": True,
         "template": texto,
     })
-@app.route("/api/ccc/mensaje", methods=["GET"])
-@login_required
-def ccc_get_message():
-    vencimiento = (request.args.get("vencimiento") or "").strip()
-
-    return jsonify({
-        "template": ccc_get_message_template(),
-        "preview": ccc_format_message(vencimiento),
-    })
-
-
 @app.route("/api/ccc/mensaje", methods=["POST"])
 @login_required
 def ccc_save_message():
