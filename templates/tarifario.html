@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Tarifario{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Tarifario</h1>
+    <p class="text-secondary mb-0">Pegá líneas con formato <strong>km=tarifa</strong>. Ejemplo: <code>250=41042.69</code></p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form method="post" class="mb-3">
+          <input type="hidden" name="accion" value="pegar">
+          <div class="mb-3">
+            <label class="form-label">Pegar tarifario</label>
+            <textarea class="form-control" name="tarifario_texto" rows="16" placeholder="1=8083.56&#10;2=8083.56&#10;3=8083.56"></textarea>
+          </div>
+          <button class="btn btn-primary" type="submit">Guardar tarifario</button>
+        </form>
+
+        <hr>
+
+        <form method="post" onsubmit="return confirm('¿Seguro que querés vaciar todo el tarifario?');">
+          <input type="hidden" name="accion" value="vaciar">
+          <button class="btn btn-outline-danger" type="submit">Vaciar tarifario</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Tarifas cargadas</h2>
+        <p class="text-secondary">Total cargadas: <strong>{{ total_items }}</strong></p>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>KM</th>
+                <th>Tarifa por TN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+              <tr>
+                <td>{{ item.km }}</td>
+                <td>{{ item.tarifa_tn|ars }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2" class="text-center text-secondary py-4">Todavía no cargaste tarifario.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

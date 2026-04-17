@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Liquidaciones{% endblock %}
+
+{% block content %}
+
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Liquidaciones</div>
+    <div class="module-subtitle">Control de pagos a fleteros, descuentos y saldo pendiente</div>
+  </div>
+  <div class="module-header-actions">
+    <a href="{{ url_for('nueva_liquidacion') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i> Nueva liquidación
+    </a>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Filtros</div>
+  <div class="admin-panel-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-10">
+        <label class="form-label">Buscar</label>
+        <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="fletero o factura del fletero">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-dark w-100" type="submit">
+          <i class="bi bi-funnel me-1"></i> Filtrar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Total bruto</div>
+        <div class="kpi-money">{{ stats.total_bruto|ars }}</div>
+        <div class="kpi-sub">Antes de descuentos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-yellow">
+      <div class="card-body">
+        <div class="kpi-label">Descuentos</div>
+        <div class="kpi-money">{{ stats.total_descuentos|ars }}</div>
+        <div class="kpi-sub">Adelantos, combustible, etc.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Neto a pagar</div>
+        <div class="kpi-money">{{ stats.total_neto|ars }}</div>
+        <div class="kpi-sub">Monto final</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-dark">
+      <div class="card-body">
+        <div class="kpi-label">Liquidaciones</div>
+        <div class="kpi-value">{{ stats.cantidad }}</div>
+        <div class="kpi-sub">Registradas</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel">
+  <div class="admin-panel-title d-flex justify-content-between align-items-center">
+    <span>Liquidaciones cargadas</span>
+    <span class="panel-counter">{{ items|length }} resultado{{ '' if items|length == 1 else 's' }}</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Fletero</th>
+          <th>Factura fletero</th>
+          <th class="text-end">Bruto</th>
+          <th class="text-end">Descuentos</th>
+          <th class="text-end">Neto</th>
+          <th class="text-end">Pagado</th>
+          <th class="text-end">Saldo</th>
+          <th>Estado</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in items %}
+        <tr>
+          <td>{{ l.fecha.strftime('%d/%m/%Y') }}</td>
+          <td>{{ l.fletero }}</td>
+          <td>{{ l.factura_fletero or '-' }}</td>
+          <td class="text-end amount-cell">{{ l.total_bruto|ars }}</td>
+          <td class="text-end amount-cell">{{ l.total_descuentos|ars }}</td>
+          <td class="text-end amount-cell amount-strong">{{ l.neto_pagar|ars }}</td>
+          <td class="text-end amount-cell">{{ l.total_pagado|ars }}</td>
+          <td class="text-end amount-cell amount-strong">{{ l.saldo_pendiente|ars }}</td>
+          <td>
+            {% if l.estado == 'pagada' %}
+              <span class="badge text-bg-success">Pagada</span>
+            {% elif l.estado == 'parcial' %}
+              <span class="badge text-bg-warning">Parcial</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Pendiente</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('detalle_liquidacion', liquidacion_id=l.id) }}">Ver</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('editar_liquidacion', liquidacion_id=l.id) }}">Editar</a>
+              <a class="btn btn-sm btn-outline-success" href="{{ url_for('pagar_liquidacion', liquidacion_id=l.id) }}">Pagar</a>
+              <form method="post" action="{{ url_for('eliminar_liquidacion', liquidacion_id=l.id) }}" onsubmit="return confirm('¿Eliminar esta liquidación?');">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="text-center py-4 text-secondary">No hay liquidaciones cargadas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
