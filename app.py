@@ -1409,7 +1409,7 @@ def ccc_format_message(vencimiento_texto=None):
     vencimiento_texto = (vencimiento_texto or "").strip() or "[COMPLETAR]"
     return plantilla.replace("{VENCIMIENTO}", vencimiento_texto)
 
-ddef login_required(view_func):
+def login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
