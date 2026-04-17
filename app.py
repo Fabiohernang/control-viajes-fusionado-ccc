@@ -1408,52 +1408,14 @@ def ccc_format_message(vencimiento_texto=None):
     plantilla = ccc_get_message_template()
     vencimiento_texto = (vencimiento_texto or "").strip() or "[COMPLETAR]"
     return plantilla.replace("{VENCIMIENTO}", vencimiento_texto)
-def login_required(view_func):
+
+ddef login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
             return redirect(url_for("login"))
         return view_func(*args, **kwargs)
     return wrapper
-def ccc_get_message_template():
-    item = db.session.get(AppConfig, "ccc_message_template")
-    if item and (item.value or "").strip():
-        return item.value
-
-    return """Buenos días,
-
-Adjuntamos el resumen de cuenta corriente.
-
-Recordamos que el plazo de vencimiento es hasta el día {VENCIMIENTO}.
-
-Muchas gracias.
-Saludos."""
-    
-
-def ccc_set_message_template(texto):
-    texto = (texto or "").strip()
-
-    item = db.session.get(AppConfig, "ccc_message_template")
-    if not item:
-        item = AppConfig(key="ccc_message_template", value=texto)
-        db.session.add(item)
-    else:
-        item.value = texto
-
-    db.session.commit()
-
-
-def ccc_format_message(vencimiento_texto=None):
-    plantilla = ccc_get_message_template()
-    vencimiento_texto = (vencimiento_texto or "").strip() or "[COMPLETAR]"
-    return plantilla.replace("{VENCIMIENTO}", vencimiento_texto)
-
-@app.before_request
-def load_logged_user():
-    g.user = None
-    user_id = session.get("user_id")
-    if user_id:
-        g.user = db.session.get(User, user_id)
 
 
 # =========================
