@@ -2901,7 +2901,11 @@ def ccc_resumen_mensual():
 @app.route("/api/ccc/stats")
 @login_required
 def ccc_stats():
-    total_cuentas = CCCCuenta.query.count()
+    fecha_ref_raw = (request.args.get("fecha") or date.today().isoformat()).strip()
+    fecha_ref = ccc_parse_date(fecha_ref_raw) or date.today()
+
+    cuentas = CCCCuenta.query.order_by(CCCCuenta.nombre.asc()).all()
+    total_cuentas = len(cuentas)
     ultimo = CCCPeriodo.query.order_by(CCCPeriodo.id.desc()).first()
 
     ultimo_periodo = None
@@ -2914,9 +2918,49 @@ def ccc_stats():
             "creado": ultimo.created_at.isoformat() if ultimo.created_at else "",
         }
 
+    avisar = 0
+    suspender = 0
+    con_mora = 0
+    al_dia = 0
+    total_mora = Decimal("0")
+
+    for cuenta in cuentas:
+        bloques = ccc_build_blocks_for_cuenta(cuenta, fecha_ref=fecha_ref)
+        cuenta_tiene_abierto = False
+        cuenta_esta_al_dia = True
+
+        for b in bloques:
+            if b["pendiente"] <= 0:
+                continue
+
+            cuenta_tiene_abierto = True
+
+            if b["estado"] == "avisar":
+                avisar += 1
+                cuenta_esta_al_dia = False
+            elif b["estado"] == "suspender":
+                suspender += 1
+                cuenta_esta_al_dia = False
+            elif b["estado"] == "con_mora":
+                con_mora += 1
+                cuenta_esta_al_dia = False
+            elif b["estado"] in ("pendiente", "vence_hoy"):
+                cuenta_esta_al_dia = False
+
+            total_mora += Decimal(str(b["total_mora"]))
+
+        if not cuenta_tiene_abierto or cuenta_esta_al_dia:
+            al_dia += 1
+
     return jsonify({
         "total_cuentas": total_cuentas,
         "ultimo_periodo": ultimo_periodo,
+        "fecha_referencia": fecha_ref.isoformat(),
+        "avisar": avisar,
+        "suspender": suspender,
+        "con_mora": con_mora,
+        "al_dia": al_dia,
+        "total_mora": float(quantize_money(total_mora)),
     })
 
 # =========================
