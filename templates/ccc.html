@@ -339,8 +339,13 @@ var RULES = {
 (async function() {
   var hoy = HOY;
   document.getElementById('fecha-ref').value = hoy.toISOString().split('T')[0];
-  // Load from DB
   await cargarDesdeBD();
+  await cargarMensajeResumen();
+
+  var vencInput = document.getElementById('msg-vencimiento');
+  if (vencInput) {
+    vencInput.addEventListener('input', cargarMensajeResumen);
+  }
 })();
 
 async function cargarDesdeBD() {
