@@ -3205,7 +3205,7 @@ def ccc_stats():
         "total_mora": float(quantize_money(total_mora)),
     })
     @app.route("/api/ccc/mensaje", methods=["GET"])
-@login_required
+    @login_required
 def ccc_get_message():
     vencimiento = (request.args.get("vencimiento") or "").strip()
 
