@@ -926,13 +926,17 @@ function parsePDF(allText, filename) {
 
 // ── UI show/hide ──────────────────────────────────────────────
 function mostrarUI(){
-  ['controls','tipo-tabs','stats','filters'].forEach(function(id){
-    document.getElementById(id).style.display='';
+  ['controls','tipo-tabs','stats','filters','stats-mensual','reglas-box','mensaje-box'].forEach(function(id){
+    var el=document.getElementById(id);
+    if (el) el.style.display='';
   });
   document.getElementById('controls').style.display='flex';
   document.getElementById('tipo-tabs').style.display='flex';
   document.getElementById('stats').style.display='grid';
+  document.getElementById('stats-mensual').style.display='grid';
   document.getElementById('filters').style.display='flex';
+  document.getElementById('reglas-box').style.display='block';
+  document.getElementById('mensaje-box').style.display='block';
 }
 
 // ── Utils ──────────────────────────────────────────────────────
@@ -943,6 +947,66 @@ function showToast(msg,err){
   t.style.borderColor=err?'rgba(239,68,68,.4)':'rgba(16,185,129,.4)';
   t.textContent=msg;document.body.appendChild(t);
   setTimeout(function(){t.style.opacity='0';t.style.transform='translateY(8px)';t.style.transition='all .3s';setTimeout(function(){t.remove();},300);},2500);
+}
+  async function cargarMensajeResumen() {
+  try {
+    var venc = (document.getElementById('msg-vencimiento')?.value || '').trim();
+    var r = await fetch('/api/ccc/mensaje?vencimiento=' + encodeURIComponent(venc));
+    if (!r.ok) return;
+    var data = await r.json();
+
+    var tpl = document.getElementById('msg-template');
+    var preview = document.getElementById('msg-preview');
+
+    if (tpl) tpl.value = data.template || '';
+    if (preview) preview.textContent = data.preview || '';
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+async function guardarMensajeResumen() {
+  try {
+    var mensaje = (document.getElementById('msg-template')?.value || '').trim();
+    if (!mensaje) {
+      showToast('El mensaje no puede estar vacío', true);
+      return;
+    }
+
+    var r = await fetch('/api/ccc/mensaje', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({mensaje: mensaje})
+    });
+
+    var data = await r.json();
+    if (!r.ok || !data.ok) {
+      showToast(data.error || 'No se pudo guardar el mensaje', true);
+      return;
+    }
+
+    await cargarMensajeResumen();
+    showToast('✅ Mensaje guardado');
+  } catch(e) {
+    console.error(e);
+    showToast('Error al guardar el mensaje', true);
+  }
+}
+
+async function copiarMensajeResumen() {
+  try {
+    await cargarMensajeResumen();
+    var texto = document.getElementById('msg-preview')?.textContent || '';
+    if (!texto.trim()) {
+      showToast('No hay mensaje para copiar', true);
+      return;
+    }
+    await navigator.clipboard.writeText(texto);
+    showToast('✅ Mensaje copiado');
+  } catch(e) {
+    console.error(e);
+    showToast('No se pudo copiar el mensaje', true);
+  }
 }
 </script>
 </body>
