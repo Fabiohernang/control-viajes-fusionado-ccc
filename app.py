@@ -916,6 +916,68 @@ def ccc_serialize_cuenta(c):
         "acciones": [ccc_serialize_accion(a) for a in CCCAccion.query.filter_by(cuenta_codigo=c.codigo).order_by(CCCAccion.created_at.desc()).all()],
     }
 
+
+def ccc_parse_date(value):
+    if not value:
+        return None
+    value = str(value).strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def ccc_month_summary(year, month):
+    movimientos = CCCMovimiento.query.all()
+    cuentas = {c.codigo: c for c in CCCCuenta.query.all()}
+
+    facturado = Decimal("0")
+    cobrado = Decimal("0")
+    combustible_facturado = Decimal("0")
+    combustible_cobrado = Decimal("0")
+
+    tipos_factura = {"FAA", "FAB", "FAC", "FAD"}
+    tipos_cobro = {"REC", "NDC"}
+
+    for m in movimientos:
+        fecha = ccc_parse_date(m.fecha)
+        if not fecha or fecha.year != year or fecha.month != month:
+            continue
+
+        tipo = (m.tipo or "").upper().strip()
+        cuenta = cuentas.get(m.cuenta_codigo)
+        cuenta_tipo = (cuenta.tipo if cuenta else "clientes")
+
+        if tipo in tipos_factura and to_decimal(m.debe) > 0:
+            facturado += to_decimal(m.debe)
+            if cuenta_tipo in {"clientes", "orden"}:
+                combustible_facturado += to_decimal(m.debe)
+
+        if tipo in tipos_cobro and to_decimal(m.haber) > 0:
+            cobrado += to_decimal(m.haber)
+            if cuenta_tipo in {"clientes", "orden"}:
+                combustible_cobrado += to_decimal(m.haber)
+
+    pendiente = Decimal("0")
+    pendiente_combustible = Decimal("0")
+    for c in cuentas.values():
+        saldo = to_decimal(c.saldo)
+        if saldo > 0:
+            pendiente += saldo
+            if (c.tipo or "clientes") in {"clientes", "orden"}:
+                pendiente_combustible += saldo
+
+    return {
+        "facturado": float(quantize_money(facturado)),
+        "cobrado": float(quantize_money(cobrado)),
+        "pendiente": float(quantize_money(pendiente)),
+        "combustible_facturado": float(quantize_money(combustible_facturado)),
+        "combustible_cobrado": float(quantize_money(combustible_cobrado)),
+        "combustible_pendiente": float(quantize_money(pendiente_combustible)),
+    }
+
 def login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
@@ -2607,6 +2669,15 @@ def ccc_eliminar_accion(accion_id):
     db.session.commit()
     return jsonify({"ok": True})
 
+
+
+
+@app.route("/api/ccc/resumen-mensual")
+@login_required
+def ccc_resumen_mensual():
+    fecha_ref = (request.args.get("fecha") or date.today().isoformat()).strip()
+    fecha = ccc_parse_date(fecha_ref) or date.today()
+    return jsonify(ccc_month_summary(fecha.year, fecha.month))
 
 @app.route("/api/ccc/stats")
 @login_required
