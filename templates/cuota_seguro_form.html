@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Editar cuota y seguro{% endblock %}
+
+{% block content %}
+
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Editar cuotas y seguros</div>
+    <div class="module-subtitle">Ajustá el detalle mensual del fletero</div>
+  </div>
+  <div class="module-header-actions">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('cuotas_seguros') }}">
+      <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+  </div>
+</div>
+
+<div class="admin-panel">
+  <div class="admin-panel-title">Detalle mensual</div>
+  <div class="admin-panel-body">
+    <form method="post" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Período</label>
+        <input class="form-control" type="month" name="periodo" value="{{ item.periodo.strftime('%Y-%m') }}" required>
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">Fletero</label>
+        <input class="form-control" list="fleteros_list" type="text" name="fletero" value="{{ item.fletero }}" required>
+        <datalist id="fleteros_list">
+          {% for nombre in fleteros %}
+          <option value="{{ nombre }}">
+          {% endfor %}
+        </datalist>
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Cuota social</label>
+        <input class="form-control" type="number" min="0" step="0.01" name="cuota_social" value="{{ item.cuota_social }}">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Seguro carga</label>
+        <input class="form-control" type="number" min="0" step="0.01" name="seguro_carga" value="{{ item.seguro_carga }}">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Acc. personales</label>
+        <input class="form-control" type="number" min="0" step="0.01" name="seguro_accidentes" value="{{ item.seguro_accidentes }}">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Seguro particular</label>
+        <input class="form-control" type="number" min="0" step="0.01" name="seguro_particular" value="{{ item.seguro_particular }}">
+      </div>
+
+      <div class="col-md-2">
+        <label class="form-label">Otros descuentos</label>
+        <input class="form-control" type="number" min="0" step="0.01" name="otros_descuentos" value="{{ item.otros_descuentos }}">
+      </div>
+
+      <div class="col-md-8">
+        <label class="form-label">Observaciones</label>
+        <input class="form-control" type="text" name="observaciones" value="{{ item.observaciones or '' }}">
+      </div>
+
+      <div class="col-12">
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">
+            <i class="bi bi-save me-1"></i> Guardar cambios
+          </button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('cuotas_seguros') }}">Cancelar</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

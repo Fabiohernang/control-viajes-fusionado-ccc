@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Caja{% endblock %}
+
+{% block content %}
+<div class="hero-panel mb-4">
+  <h1 class="page-title mb-1">Caja operativa</h1>
+  <div class="text-secondary">Registro diario de ingresos y egresos para control secundario del negocio.</div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Ingresos</div>
+        <div class="kpi-money">{{ stats.ingresos|ars }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-red">
+      <div class="card-body">
+        <div class="kpi-label">Egresos</div>
+        <div class="kpi-money">{{ stats.egresos|ars }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Saldo</div>
+        <div class="kpi-money">{{ stats.saldo|ars }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-dark">
+      <div class="card-body">
+        <div class="kpi-label">Movimientos</div>
+        <div class="kpi-value">{{ stats.cantidad }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card app-card shadow-sm mb-4">
+  <div class="card-body p-4">
+    <h2 class="h5 mb-3">Nuevo movimiento de caja</h2>
+    <form method="post" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Fecha</label>
+        <input type="date" class="form-control" name="fecha" value="{{ today }}" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" name="tipo" required>
+          <option value="ingreso">Ingreso</option>
+          <option value="egreso">Egreso</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Importe</label>
+        <input type="number" step="0.01" min="0.01" class="form-control" name="importe" required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Observaciones</label>
+        <input type="text" class="form-control" name="observaciones" placeholder="Detalle del movimiento">
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary">Guardar movimiento</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card app-card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tipo</th>
+          <th>Importe</th>
+          <th>Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for x in items %}
+        <tr>
+          <td>{{ x.fecha.strftime('%d/%m/%Y') }}</td>
+          <td>
+            {% if x.tipo == 'ingreso' %}
+              <span class="badge text-bg-success">Ingreso</span>
+            {% else %}
+              <span class="badge text-bg-danger">Egreso</span>
+            {% endif %}
+          </td>
+          <td>{{ x.importe|ars }}</td>
+          <td>{{ x.observaciones or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center py-4 text-secondary">No hay movimientos de caja.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
