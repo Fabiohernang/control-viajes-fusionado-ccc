@@ -473,6 +473,14 @@ def set_default_config():
         "socio_commission_rate": "0.06",
         "no_socio_commission_rate": "0.10",
         "lucas_commission_rate": "0.015",
+        "ccc_message_template": """Buenos días,
+
+Adjuntamos el resumen de cuenta corriente.
+
+Recordamos que el plazo de vencimiento es hasta el día {VENCIMIENTO}.
+
+Muchas gracias.
+Saludos.""",
     }
     changed = False
     for key, value in defaults.items():
