@@ -211,6 +211,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 <div class="wrap">
 
   <!-- Upload -->
+  <div class="card" style="margin-bottom:14px;padding:14px;">
+    <div class="slabel">Sector a cargar</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-pri" onclick="setSectorCarga('clientes')">Clientes</button>
+      <button class="btn btn-pri" onclick="setSectorCarga('orden_externos')">Orden externos</button>
+      <button class="btn btn-pri" onclick="setSectorCarga('orden_socios')">Orden socios</button>
+      <button class="btn btn-pri" onclick="setSectorCarga('socios_particulares')">Socios particulares</button>
+      <button class="btn btn-pri" onclick="setSectorCarga('telefonos')">Teléfonos</button>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted);">
+      Sector seleccionado: <strong id="sector-carga-label">clientes</strong>
+    </div>
+  </div>
+
   <div class="upload-box" id="upload-box" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)">
     <input type="file" accept=".pdf" multiple onchange="handleFiles(this.files)">
     <div class="up-icon">📄</div>
@@ -229,6 +243,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <input type="date" id="fecha-ref" onchange="recalcAll()">
     </div>
     <button class="btn btn-ghost" onclick="document.getElementById('upload-box').style.display='';document.getElementById('upload-box').scrollIntoView()">+ Agregar PDF</button>
+    <button class="btn btn-red" onclick="eliminarSectorActual()">🗑 Eliminar carga sector</button>
     <button class="btn btn-pri" onclick="exportarResumen()" id="btn-export">↓ Exportar resumen</button>
   </div>
 
@@ -247,8 +262,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div class="tipo-tabs" id="tipo-tabs" style="display:none">
     <button class="ttab on" onclick="filtrarTipo('todos',this)">Todos</button>
     <button class="ttab" onclick="filtrarTipo('clientes',this)">🏢 Clientes</button>
-    <button class="ttab" onclick="filtrarTipo('socios',this)">👤 Socios</button>
-    <button class="ttab" onclick="filtrarTipo('orden',this)">⛽ Cuentas Orden</button>
+    <button class="ttab" onclick="filtrarTipo('orden_externos',this)">⛽ Orden externos</button>
+    <button class="ttab" onclick="filtrarTipo('orden_socios',this)">🚛 Orden socios</button>
+    <button class="ttab" onclick="filtrarTipo('socios_particulares',this)">👤 Socios particulares</button>
     <button class="ttab" onclick="filtrarTipo('telefonos',this)">📞 Teléfonos</button>
   </div>
 
@@ -328,10 +344,12 @@ var HOY = new Date();
 var FEST = 'todos';
 var FTIPO = 'todos';
 var FBUSQ = '';
+var SECTOR_CARGA = 'clientes';
 var RULES = {
   clientes:{ajuste:true,aviso:true,suspension:true},
-  socios:{ajuste:false,aviso:true,suspension:false},
-  orden:{ajuste:false,aviso:true,suspension:false},
+  orden_externos:{ajuste:false,aviso:true,suspension:false},
+  orden_socios:{ajuste:false,aviso:true,suspension:false},
+  socios_particulares:{ajuste:false,aviso:true,suspension:false},
   telefonos:{ajuste:false,aviso:true,suspension:false,lineaCancelar:true}
 };
 
@@ -346,6 +364,7 @@ var RULES = {
   if (vencInput) {
     vencInput.addEventListener('input', cargarMensajeResumen);
   }
+  setSectorCarga('clientes');
 })();
 
 async function cargarDesdeBD() {
@@ -364,6 +383,13 @@ async function cargarDesdeBD() {
       document.getElementById('last-load').textContent = '📅 Última carga: '+stats.ultimo_periodo.fecha_carga+' — '+stats.ultimo_periodo.archivo;
     }
   } catch(e) { console.error(e); }
+}
+
+
+function setSectorCarga(sector) {
+  SECTOR_CARGA = sector;
+  var lbl = document.getElementById('sector-carga-label');
+  if (lbl) lbl.textContent = sector;
 }
 
 function mapCuenta(c) {
@@ -520,7 +546,7 @@ function renderCard(c) {
   else if (c.estado==='pendiente') badges+='<span class="badge b-info">PENDIENTE</span>';
   if (c.totalAjuste>0) badges+='<span class="badge b-ajuste">Mora $'+fmtN(c.totalAjuste)+'</span>';
   if (c.acciones&&c.acciones.length) badges+='<span class="badge b-manual">'+c.acciones.length+' acción'+(c.acciones.length>1?'es':'')+'</span>';
-  var ticon={clientes:'🏢',socios:'👤',orden:'⛽',telefonos:'📞'}[c.tipo]||'';
+  var ticon={clientes:'🏢',orden_externos:'⛽',orden_socios:'🚛',socios_particulares:'👤',telefonos:'📞'}[c.tipo]||'';
   return '<div class="card" id="card-'+c.codigo+'">'+
     '<div class="card-hdr" onclick="toggle(\''+c.codigo+'\')">'+
       '<div class="status-dot '+dotClass+'"></div>'+
@@ -832,7 +858,7 @@ async function handleFiles(files) {
   // Save to DB
   var nombres=arr.map(function(f){return f.name;}).join(', ');
   var r=await fetch('/api/ccc/upload',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cuentas:allCuentas,archivo:nombres})});
+    body:JSON.stringify({cuentas:allCuentas,archivo:nombres,sector:SECTOR_CARGA})});
   var data=await r.json();
   fill.style.width='100%';
   txt.textContent='✅ '+data.cuentas+' cuentas guardadas';
@@ -871,17 +897,21 @@ function parsePDF(allText, filename) {
   var lines=allText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
   var clients=[];
   var cur=null;
-  var tipo='clientes';
-  var fn=filename.toLowerCase();
-  if (fn.includes('orden')) tipo='orden';
-  else if (fn.includes('telef')||fn.includes('cel')) tipo='telefonos';
-  else if (fn.includes('socio')||fn.includes('particular')) tipo='socios';
+  var tipo = SECTOR_CARGA;
+  var fn = filename.toLowerCase();
+  if (fn.includes('telefon')) tipo = 'telefonos';
+  else if (fn.includes('particular')) tipo = 'socios_particulares';
+  else if (fn.includes('orden') && fn.includes('socio')) tipo = 'orden_socios';
+  else if (fn.includes('orden') && fn.includes('extern')) tipo = 'orden_externos';
+  else if (fn.includes('cliente')) tipo = 'clientes';
 
   for (var i=0;i<lines.length;i++){
     var line=lines[i];
-    if (line.toLowerCase().includes('cuentas orden')) tipo='orden';
-    if (line.toLowerCase().includes('telefon')&&line.toLowerCase().includes('cuenta')) tipo='telefonos';
-    if (line.toLowerCase().includes('socios')&&line.toLowerCase().includes('particular')) tipo='socios';
+    var low = line.toLowerCase();
+    if (low.includes('telefon') && low.includes('cuenta')) tipo = 'telefonos';
+    if (low.includes('socios') && low.includes('particular')) tipo = 'socios_particulares';
+    if (low.includes('orden') && low.includes('socio')) tipo = 'orden_socios';
+    if (low.includes('orden') && low.includes('extern')) tipo = 'orden_externos';
 
     var cm=line.match(/^Cliente:\s*([A-Z0-9]+)\s+(.+)$/);
     if (cm) {
@@ -1011,6 +1041,28 @@ async function copiarMensajeResumen() {
   } catch(e) {
     console.error(e);
     showToast('No se pudo copiar el mensaje', true);
+  }
+}
+
+async function eliminarSectorActual() {
+  if (!confirm('¿Eliminar toda la carga del sector ' + SECTOR_CARGA + '?')) return;
+
+  try {
+    var r = await fetch('/api/ccc/sector/' + encodeURIComponent(SECTOR_CARGA), { method:'DELETE' });
+    var data = await r.json();
+
+    if (!r.ok || !data.ok) {
+      showToast(data.error || 'No se pudo eliminar la carga', true);
+      return;
+    }
+
+    CUENTAS = CUENTAS.filter(function(c){ return c.tipo !== SECTOR_CARGA; });
+    render();
+    showToast('✅ Carga eliminada: ' + SECTOR_CARGA);
+    await cargarDesdeBD();
+  } catch(e) {
+    console.error(e);
+    showToast('Error al eliminar la carga', true);
   }
 }
 </script>
