@@ -2943,21 +2943,23 @@ def ccc_delete_sector(sector):
     if sector not in sectores_validos:
         return jsonify({"ok": False, "error": "Sector inválido"}), 400
 
-    periodos = CCCPeriodo.query.filter_by(sector=sector).all()
-    periodo_ids = [p.id for p in periodos]
+    # Borrar movimientos por sector (incluye NDA-MANUAL con periodo_id=None)
+    CCCMovimiento.query.filter_by(sector=sector).delete(synchronize_session=False)
 
-    if periodo_ids:
-        CCCMovimiento.query.filter(CCCMovimiento.periodo_id.in_(periodo_ids)).delete(synchronize_session=False)
-        CCCPeriodo.query.filter(CCCPeriodo.id.in_(periodo_ids)).delete(synchronize_session=False)
+    # Borrar periodos del sector
+    CCCPeriodo.query.filter_by(sector=sector).delete(synchronize_session=False)
 
-    cuentas = CCCCuenta.query.filter_by(tipo=sector).all()
-    for cuenta in cuentas:
-        cuenta.saldo = Decimal("0")
-        cuenta.fecha_actualizacion = date.today()
+    # Borrar acciones de cuentas de este sector
+    codigos = [c.codigo for c in CCCCuenta.query.filter_by(tipo=sector).all()]
+    if codigos:
+        CCCAccion.query.filter(CCCAccion.cuenta_codigo.in_(codigos)).delete(synchronize_session=False)
+
+    # Eliminar las filas de CCCCuenta completamente (no solo resetear saldo)
+    CCCCuenta.query.filter_by(tipo=sector).delete(synchronize_session=False)
 
     db.session.commit()
 
-    return jsonify({"ok": True, "sector": sector})
+    return jsonify({"ok": True, "sector": sector, "eliminadas": len(codigos)})
 
 
 @app.route("/api/ccc/todo", methods=["DELETE"])
@@ -2966,16 +2968,8 @@ def ccc_delete_all():
     CCCMovimiento.query.delete(synchronize_session=False)
     CCCPeriodo.query.delete(synchronize_session=False)
     CCCAccion.query.delete(synchronize_session=False)
-
-    cuentas = CCCCuenta.query.all()
-    for cuenta in cuentas:
-        cuenta.saldo = Decimal("0")
-        cuenta.fecha_actualizacion = date.today()
-        cuenta.estado_manual = None
-        cuenta.obs_manual = None
-
+    CCCCuenta.query.delete(synchronize_session=False)  # Eliminar cuentas completamente
     db.session.commit()
-
     return jsonify({"ok": True})
 
 
@@ -2993,7 +2987,13 @@ def ccc_listar_cuentas():
         query = query.filter(or_(CCCCuenta.nombre.ilike(like), CCCCuenta.codigo.ilike(like)))
 
     cuentas = query.order_by(CCCCuenta.nombre.asc()).all()
-    return jsonify([ccc_serialize_cuenta(c) for c in cuentas])
+    # Only return cuentas that have movimientos (defense against orphaned rows)
+    result = []
+    for c in cuentas:
+        movs_count = CCCMovimiento.query.filter_by(cuenta_codigo=c.codigo).count()
+        if movs_count > 0 or (c.estado_manual and c.estado_manual.strip()):
+            result.append(ccc_serialize_cuenta(c))
+    return jsonify(result)
 
 
 @app.route("/api/ccc/cuentas/<codigo>", methods=["GET", "PUT"])
