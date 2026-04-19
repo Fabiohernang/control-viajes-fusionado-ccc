@@ -198,8 +198,15 @@ class Factura(db.Model):
 
     @property
     def total_pendiente_cliente(self):
-        facturas_cliente = Factura.query.filter_by(cliente=self.cliente).all()
-        return quantize_money(sum((to_decimal(f.saldo_pendiente) for f in facturas_cliente), Decimal("0")))
+        # Optimized: uses aggregate query instead of loading all facturas
+        from sqlalchemy import func as _func
+        result = db.session.query(
+            _func.coalesce(_func.sum(Factura.importe_total), 0)
+        ).filter(
+            Factura.cliente == self.cliente,
+            Factura.estado_pago != "pagada"
+        ).scalar()
+        return quantize_money(to_decimal(result))
 
 
 class Pago(db.Model):
@@ -270,6 +277,8 @@ class CajaMovimiento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.Date, nullable=False, index=True)
     tipo = db.Column(db.String(20), nullable=False, index=True)  # ingreso | egreso
+    concepto = db.Column(db.String(200), nullable=True, index=True)
+    medio = db.Column(db.String(50), nullable=True)  # efectivo, transferencia, cheque
     importe = db.Column(db.Numeric(14, 2), nullable=False, default=0)
     observaciones = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -664,6 +673,8 @@ def ensure_schema():
                 ALTER TABLE ccc_movimientos
                 ADD COLUMN IF NOT EXISTS sector VARCHAR(50) NOT NULL DEFAULT 'clientes'
             """))
+            conn.execute(text("ALTER TABLE caja_movimientos ADD COLUMN IF NOT EXISTS concepto VARCHAR(200)"))
+            conn.execute(text("ALTER TABLE caja_movimientos ADD COLUMN IF NOT EXISTS medio VARCHAR(50)"))
 
 
 def upsert_maestro(model, nombre):
@@ -1451,6 +1462,7 @@ def reportes():
     year = int(request.args.get("year", today.year))
 
     stats = get_monthly_stats(year, month)
+    ccc_stats = ccc_month_summary(year, month)
 
     viajes_mes = (
         Viaje.query.filter(
@@ -1461,12 +1473,23 @@ def reportes():
         .all()
     )
 
+    # Cobranzas del mes: pagos aplicados en ese periodo
+    pagos_mes = Pago.query.filter(
+        func.extract("year", Pago.fecha_pago) == year,
+        func.extract("month", Pago.fecha_pago) == month,
+    ).all()
+    total_cobrado_mes = quantize_money(sum((to_decimal(p.total_aplicable) for p in pagos_mes), Decimal("0")))
+    cantidad_pagos_mes = len(pagos_mes)
+
     return render_template(
         "reportes.html",
         selected_month=month,
         selected_year=year,
         stats=stats,
+        ccc_stats=ccc_stats,
         viajes=viajes_mes,
+        total_cobrado_mes=total_cobrado_mes,
+        cantidad_pagos_mes=cantidad_pagos_mes,
     )
 
 
@@ -1937,6 +1960,19 @@ def detalle_factura(factura_id):
     )
 
 
+@app.route("/facturas/<int:factura_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_factura(factura_id):
+    factura = Factura.query.get_or_404(factura_id)
+    if factura.aplicaciones:
+        flash("No se puede eliminar una factura con pagos aplicados.", "warning")
+        return redirect(url_for("detalle_factura", factura_id=factura_id))
+    db.session.delete(factura)
+    db.session.commit()
+    flash("Factura eliminada.", "success")
+    return redirect(url_for("facturas"))
+
+
 @app.route("/facturas/<int:factura_id>/editar-percepciones", methods=["POST"])
 @login_required
 def editar_percepciones(factura_id):
@@ -1960,14 +1996,41 @@ def editar_percepciones(factura_id):
 @app.route("/pagos")
 @login_required
 def pagos():
-    items = Pago.query.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).all()
+    q = request.args.get("q", "").strip()
+    medio = request.args.get("medio", "").strip()
+    fecha_desde_raw = request.args.get("fecha_desde", "").strip()
+    fecha_hasta_raw = request.args.get("fecha_hasta", "").strip()
 
+    query = Pago.query
+
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(Pago.productor.ilike(like), Pago.numero_referencia.ilike(like), Pago.observaciones.ilike(like))
+        )
+    if medio:
+        query = query.filter(Pago.medio_pago == medio)
+    if fecha_desde_raw:
+        try:
+            fd = datetime.strptime(fecha_desde_raw, "%Y-%m-%d").date()
+            query = query.filter(Pago.fecha_pago >= fd)
+        except ValueError:
+            pass
+    if fecha_hasta_raw:
+        try:
+            fh = datetime.strptime(fecha_hasta_raw, "%Y-%m-%d").date()
+            query = query.filter(Pago.fecha_pago <= fh)
+        except ValueError:
+            pass
+
+    items = query.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).all()
     stats_count = len(items)
     stats_total = quantize_money(sum((to_decimal(x.total_aplicable) for x in items), Decimal("0")))
 
     return render_template(
         "pagos.html",
         items=items,
+        q=q, medio=medio, fecha_desde=fecha_desde_raw, fecha_hasta=fecha_hasta_raw,
         stats={"cantidad": stats_count, "total": stats_total},
     )
 
@@ -1994,9 +2057,14 @@ def caja():
             flash("Fecha inválida.", "warning")
             return redirect(url_for("caja"))
 
+        concepto = request.form.get("concepto", "").strip() or None
+        medio = request.form.get("medio", "").strip() or None
+
         mov = CajaMovimiento(
             fecha=fecha_obj,
             tipo=tipo,
+            concepto=concepto,
+            medio=medio,
             importe=quantize_money(importe),
             observaciones=observaciones,
         )
