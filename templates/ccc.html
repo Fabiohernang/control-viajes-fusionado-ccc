@@ -44,6 +44,10 @@
     <button class="btn btn-outline-secondary btn-sm" id="btn-export" style="display:none" onclick="exportarResumen()">
       <i class="bi bi-download me-1"></i>Exportar
     </button>
+    <label class="btn btn-outline-primary btn-sm mb-0" id="btn-add-pdf" style="display:none;cursor:pointer">
+      <i class="bi bi-plus-circle me-1"></i>Agregar PDF
+      <input type="file" accept=".pdf" multiple class="d-none" onchange="handleFiles(this.files)">
+    </label>
   </div>
 </div>
 
@@ -237,6 +241,8 @@ var SECTOR_CARGA = 'clientes';
 (async function() {
   var hoy = new Date();
   document.getElementById('fecha-ref').value = hoy.toISOString().split('T')[0];
+  // Ensure clean initial state before loading
+  document.getElementById('upload-box').style.display = '';
   await cargarDesdeBD();
   await cargarMensajeResumen();
 })();
@@ -246,8 +252,13 @@ async function cargarDesdeBD() {
     var res = await fetch('/api/ccc/cuentas');
     if (!res.ok) return;
     var cuentas = await res.json();
-    if (!cuentas.length) return;
+    // SIEMPRE reemplazar CUENTAS (incluso si es vacío después de un delete)
     CUENTAS = cuentas.map(mapCuenta);
+    if (!CUENTAS.length) {
+      // No hay datos: mostrar upload box, ocultar UI
+      resetUI();
+      return;
+    }
     recalcAll();
     mostrarUI();
     render();
@@ -742,7 +753,6 @@ async function handleFiles(files) {
   setTimeout(async function(){
     document.getElementById('prog-wrap').style.display = 'none';
     await cargarDesdeBD();
-    mostrarUI();
     showToast('✅ ' + data.cuentas + ' cuentas cargadas');
   }, 800);
 }
@@ -827,21 +837,39 @@ function parsePDF(allText, filename) {
 
 // ── UI helpers ────────────────────────────────────────────────
 function mostrarUI() {
+  document.getElementById('upload-box').style.display = 'none';
   document.getElementById('tipo-tabs').style.display = 'flex';
   document.getElementById('stats-bar').style.display = 'flex';
   document.getElementById('filters-bar').style.display = 'flex';
   document.getElementById('mensaje-box').style.display = '';
   document.getElementById('btn-export').style.display = '';
+  var addBtn = document.getElementById('btn-add-pdf');
+  if (addBtn) addBtn.style.display = '';
+}
+
+function resetUI() {
+  // Vuelve al estado inicial: muestra upload, oculta todo lo demás
+  CUENTAS = [];
+  document.getElementById('upload-box').style.display = '';
+  document.getElementById('tipo-tabs').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+  document.getElementById('filters-bar').style.display = 'none';
+  document.getElementById('mensaje-box').style.display = 'none';
+  document.getElementById('btn-export').style.display = 'none';
+  var addBtn = document.getElementById('btn-add-pdf');
+  if (addBtn) addBtn.style.display = 'none';
+  document.getElementById('last-load').textContent = 'Sin datos cargados';
+  document.getElementById('content').innerHTML =
+    '<div class="text-center py-5 text-muted"><div style="font-size:40px">📊</div><div class="mt-2">Subí el PDF para ver las cuentas</div></div>';
 }
 
 async function eliminarSectorActual() {
-  if (!confirm('¿Eliminar toda la carga del sector "' + SECTOR_CARGA + '"?')) return;
+  if (!confirm('¿Eliminar toda la carga del sector "' + SECTOR_CARGA + '"? Esta acción no se puede deshacer.')) return;
   var r = await fetch('/api/ccc/sector/' + encodeURIComponent(SECTOR_CARGA), {method:'DELETE'});
   var data = await r.json();
   if (!data.ok) { showToast(data.error || 'No se pudo eliminar', true); return; }
-  CUENTAS = CUENTAS.filter(function(c){return c.tipo !== SECTOR_CARGA;});
-  render();
   showToast('✅ Sector eliminado: ' + SECTOR_CARGA);
+  // Reload from DB — cargarDesdeBD will call resetUI if no data remains
   await cargarDesdeBD();
 }
 
