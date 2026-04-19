@@ -210,4 +210,22 @@
   </div>
 </div>
 
+
+<div class="admin-panel mt-4">
+  <div class="admin-panel-body">
+    {% if not factura.aplicaciones %}
+    <form method="post" action="{{ url_for('eliminar_factura', factura_id=factura.id) }}"
+          onsubmit="return confirm('¿Eliminar esta factura? No se puede deshacer.');">
+      <button type="submit" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash me-1"></i> Eliminar factura
+      </button>
+    </form>
+    {% else %}
+    <p class="text-muted small mb-0">
+      <i class="bi bi-lock me-1"></i> No se puede eliminar: tiene {{ factura.aplicaciones|length }} pago{{ 's' if factura.aplicaciones|length != 1 else '' }} aplicado{{ 's' if factura.aplicaciones|length != 1 else '' }}.
+    </p>
+    {% endif %}
+  </div>
+</div>
+
 {% endblock %}
