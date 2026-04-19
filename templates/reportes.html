@@ -107,6 +107,84 @@
 
 </div>
 
+<!-- Cobranzas del mes -->
+<h2 class="h5 mb-3 mt-2" style="color:var(--brand-900)"><i class="bi bi-cash-stack me-2"></i>Cobranzas del mes</h2>
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Total cobrado</div>
+        <div class="kpi-money">{{ total_cobrado_mes|ars }}</div>
+        <div class="kpi-sub">Pagos del período</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Cantidad pagos</div>
+        <div class="kpi-value">{{ cantidad_pagos_mes }}</div>
+        <div class="kpi-sub">Registrados en el mes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EESS — Cuentas corrientes -->
+{% if ccc_stats %}
+<h2 class="h5 mb-3 mt-2" style="color:var(--brand-900)"><i class="bi bi-journal-text me-2"></i>EESS — Cuentas corrientes del mes</h2>
+<div class="row g-3 mb-4">
+  <div class="col-md-2">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Facturado EESS</div>
+        <div class="kpi-money">{{ ccc_stats.facturado | round(2) | string | replace('.', ',') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Cobrado EESS</div>
+        <div class="kpi-money">{{ ccc_stats.cobrado | round(2) | string | replace('.', ',') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="card kpi-card kpi-accent-red">
+      <div class="card-body">
+        <div class="kpi-label">Pendiente EESS</div>
+        <div class="kpi-money">{{ ccc_stats.pendiente | round(2) | string | replace('.', ',') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="card kpi-card kpi-accent-yellow">
+      <div class="card-body">
+        <div class="kpi-label">Mora total</div>
+        <div class="kpi-money">{{ ccc_stats.mora_total | round(2) | string | replace('.', ',') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="card kpi-card kpi-accent-red">
+      <div class="card-body">
+        <div class="kpi-label">Cuentas a avisar</div>
+        <div class="kpi-value">{{ ccc_stats.avisos }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="card kpi-card kpi-accent-dark">
+      <div class="card-body">
+        <div class="kpi-label">A suspender</div>
+        <div class="kpi-value">{{ ccc_stats.suspendibles }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card shadow-sm app-card">
   <div class="card-body p-0">
     <div class="table-responsive">
