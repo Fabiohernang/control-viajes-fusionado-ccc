@@ -1,5 +1,22 @@
 {% extends "base.html" %}
-{% block title %}{% if liquidacion %}Editar liquidación{% else %}Nueva liquidación{% endif %}{% endblock %}
+{% block title %}{% if liquidacion %}Editar liquidación{% else %}Nueva liquidación{% endif %}
+<script>
+function filtrarViajes(q) {
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('.viaje-row').forEach(function(row) {
+    var match = !q || row.dataset.fletero.includes(q) || row.dataset.cliente.includes(q);
+    row.style.display = match ? '' : 'none';
+  });
+}
+function seleccionarFletero() {
+  var fInput = document.querySelector('[name="fletero"]');
+  var val = (fInput ? fInput.value : '').trim();
+  if (!val) { alert('Primero completá el campo Fletero.'); return; }
+  var fi = document.getElementById('filtro_viajes');
+  if (fi) { fi.value = val; filtrarViajes(val); }
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="hero-panel mb-4">
@@ -62,7 +79,11 @@
       <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h2 class="h5 mb-0">Viajes incluidos</h2>
-          <span class="text-secondary small">Seleccioná los viajes que entran en la liquidación</span>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="text" id="filtro_viajes" class="form-control form-control-sm" style="width:200px"
+              placeholder="Filtrar por fletero..." oninput="filtrarViajes(this.value)">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="seleccionarFletero()">Solo fletero actual</button>
+          </div>
         </div>
 
         {% set viajes_seleccionados = liquidacion.items | map(attribute='viaje_id') | list if liquidacion else [] %}
@@ -81,7 +102,7 @@
             </thead>
             <tbody>
               {% for viaje in viajes %}
-              <tr>
+              <tr class="viaje-row" data-fletero="{{ viaje.fletero|lower }}" data-cliente="{{ viaje.cliente|lower }}">
                 <td>
                   <input class="form-check-input viaje-check" type="checkbox" name="viaje_ids" value="{{ viaje.id }}" data-importe="{{ viaje.total_importe }}"
                     {% if viaje.id in viajes_seleccionados %}checked{% endif %}>
