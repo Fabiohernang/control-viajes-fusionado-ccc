@@ -123,17 +123,6 @@ def ccc_rules_for_tipo(tipo):
 
     return {"aviso": True, "mora": True, "suspension": True}
 
-    if tipo == "socios":
-        return {"aviso": True, "mora": False, "suspension": False}
-
-    if tipo == "orden":
-        return {"aviso": True, "mora": False, "suspension": False}
-
-    if tipo == "telefonos":
-        return {"aviso": True, "mora": False, "suspension": False}
-
-    return {"aviso": True, "mora": True, "suspension": True}
-
 
 def ccc_calc_coef(dias_vencidos, tasa_mensual=Decimal("0.07")):
     if dias_vencidos <= 0:
