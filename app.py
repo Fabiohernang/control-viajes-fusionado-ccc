@@ -1,9 +1,11 @@
 import os
 import csv
 import io
+import re
 from functools import wraps
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
+from pypdf import PdfReader
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -500,6 +502,224 @@ Saludos.""",
             changed = True
     if changed:
         db.session.commit()
+
+
+
+
+def parse_date_safe(value):
+    value = (value or "").strip()
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def normalize_spaces(value):
+    return re.sub(r"\s+", " ", (value or "").replace("\xa0", " ")).strip()
+
+
+def normalize_title_keep_upper(value):
+    value = normalize_spaces(value)
+    if not value:
+        return value
+    return " ".join(word if word.isupper() else word.capitalize() for word in value.split())
+
+
+def parse_local_decimal(value, default="0"):
+    value = normalize_spaces(value)
+    if not value:
+        return Decimal(default)
+    cleaned = value.replace(".", "").replace(",", ".")
+    return to_decimal(cleaned, default)
+
+
+def extract_first_match(pattern, text, flags=0, group=1, default=None):
+    match = re.search(pattern, text, flags)
+    if not match:
+        return default
+    return match.group(group).strip()
+
+
+def parse_amount_from_lines(lines, keyword):
+    for idx, line in enumerate(lines):
+        if keyword not in line:
+            continue
+
+        candidates = [line]
+        if idx + 1 < len(lines):
+            candidates.append(lines[idx + 1])
+        if idx + 2 < len(lines):
+            candidates.append(lines[idx + 2])
+
+        for candidate in candidates:
+            nums = re.findall(r"\$?\s*([\d\.,]+)", candidate)
+            nums = [n for n in nums if any(ch.isdigit() for ch in n)]
+            if nums:
+                return parse_local_decimal(nums[-1])
+    return Decimal("0")
+
+
+def parse_factura_pdf(file_storage):
+    reader = PdfReader(file_storage)
+    layout_pages = [page.extract_text(extraction_mode="layout") or "" for page in reader.pages]
+    raw_pages = [page.extract_text() or "" for page in reader.pages]
+
+    layout_text = "\n".join(layout_pages)
+    compact_text = normalize_spaces(" ".join(raw_pages))
+    layout_lines = [line.strip() for line in layout_text.splitlines()]
+
+    numero_factura = extract_first_match(r"N[º°]\s*([0-9]{4}-[0-9]{8})", layout_text)
+    fecha_factura = parse_date_safe(extract_first_match(r"FECHA:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", layout_text, default=""))
+    fecha_vencimiento = parse_date_safe(extract_first_match(r"Fecha de Vencimiento\s*:?[ ]*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", layout_text, default=""))
+
+    cliente = normalize_spaces(extract_first_match(r"SEÑOR/ES:\s*(.*?)\s*Cliente Nº:", layout_text, flags=re.S, default=""))
+    cliente_numero = extract_first_match(r"Cliente Nº:\s*([0-9\.]+)", layout_text, default="")
+    cuit_cliente = extract_first_match(r"([0-9]{2}-[0-9]{8}-[0-9])C\.U\.I\.T\.", layout_text, default="")
+    condicion_pago = extract_first_match(r"Condición de Pago:\s*(.*?)\s*Fecha de Vencimiento", layout_text, flags=re.S, default="")
+
+    subtotal = parse_amount_from_lines(layout_lines, "Subtotal")
+    iva = parse_amount_from_lines(layout_lines, "I.V.A. INSC %")
+    percepciones = parse_amount_from_lines(layout_lines, "PERC. IIBB")
+    impuesto = parse_amount_from_lines(layout_lines, "IMPUESTO")
+    total = Decimal("0")
+    for line in layout_lines:
+        if "TOTAL" in line and "$" in line:
+            nums = re.findall(r"\$\s*([\d\.,]+)", line)
+            if nums:
+                total = parse_local_decimal(nums[-1])
+                break
+    if total == 0:
+        total = subtotal + iva + percepciones + impuesto
+
+    item_pattern = re.compile(r"1,00\s+([\d\.,]+)\s+([\d\.,]+)\s*(Socio .*?)CTG:\s*(\d+)", re.S)
+    detail_pattern = re.compile(
+        r"Socio\s+(.*?),\s*desde\s+(.*?)\s+hasta\s+(.*?)\s+\((\d+)km\.\)\s+([\d\.]+)\s+kg de\s+([A-ZÁÉÍÓÚÑ ]+)\.\s*Tarifa\s*\$([\d\.]+)",
+        re.I
+    )
+
+    items = []
+    for match in item_pattern.finditer(compact_text):
+        importe_total = parse_local_decimal(match.group(2))
+        body = normalize_spaces(match.group(3))
+        ctg = match.group(4)
+        detail = detail_pattern.search(body)
+        if not detail:
+            continue
+
+        fletero_raw, origen, destino, km, kg_raw, producto, tarifa_raw = detail.groups()
+        fletero = normalize_title_keep_upper(fletero_raw)
+        origen = normalize_title_keep_upper(origen)
+        destino = normalize_title_keep_upper(destino)
+        producto = normalize_title_keep_upper(producto)
+
+        kg_decimal = to_decimal(kg_raw, "0")
+        kg_tn = quantize_money(kg_decimal / Decimal("1000"))
+        tarifa = to_decimal(tarifa_raw, "0")
+
+        items.append({
+            "fletero": fletero,
+            "socio": True,
+            "origen": origen,
+            "destino": destino,
+            "kilometros": int(km),
+            "kg": float(kg_tn),
+            "kg_bruto": kg_raw,
+            "producto": producto,
+            "tarifa": str(tarifa),
+            "ctg": ctg,
+            "importe_total": str(importe_total),
+        })
+
+    parsed = {
+        "numero_factura": numero_factura or "",
+        "fecha": fecha_factura.isoformat() if fecha_factura else "",
+        "fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else "",
+        "cliente": cliente,
+        "cliente_numero": cliente_numero,
+        "cuit_cliente": cuit_cliente,
+        "condicion_pago": condicion_pago,
+        "subtotal": str(quantize_money(subtotal)),
+        "iva": str(quantize_money(iva)),
+        "percepciones": str(quantize_money(percepciones + impuesto)),
+        "impuesto": str(quantize_money(impuesto)),
+        "total": str(quantize_money(total)),
+        "items": items,
+        "cantidad_items": len(items),
+    }
+
+    if not parsed["numero_factura"] or not parsed["cliente"] or not parsed["fecha"]:
+        raise ValueError("No se pudieron detectar correctamente los datos principales de la factura.")
+
+    return parsed
+
+
+def crear_factura_y_viajes_desde_importacion(data, crear_viajes=True):
+    numero_factura = (data.get("numero_factura") or "").strip()
+    if Factura.query.filter_by(numero_factura=numero_factura).first():
+        raise ValueError(f"La factura {numero_factura} ya existe.")
+
+    fecha_factura = parse_date_safe(data.get("fecha")) or date.today()
+    fecha_vencimiento = parse_date_safe(data.get("fecha_vencimiento")) or (fecha_factura + timedelta(days=20))
+    cliente = (data.get("cliente") or "").strip()
+
+    upsert_maestro(Productor, cliente)
+
+    factura = Factura(
+        numero_factura=numero_factura,
+        fecha=fecha_factura,
+        fecha_vencimiento=fecha_vencimiento,
+        cliente=cliente,
+        importe_neto=quantize_money(to_decimal(data.get("subtotal", "0"))),
+        iva=quantize_money(to_decimal(data.get("iva", "0"))),
+        percepciones=quantize_money(to_decimal(data.get("percepciones", "0"))),
+        importe_total=quantize_money(to_decimal(data.get("total", "0"))),
+        estado_pago="pendiente",
+        observaciones=f"Importada desde PDF. Cliente N° {data.get('cliente_numero') or '-'}",
+    )
+    db.session.add(factura)
+
+    if crear_viajes:
+        iva_rate = get_config_decimal("iva_rate", "0.21")
+        socio_rate = get_config_decimal("socio_commission_rate", "0.06")
+        no_socio_rate = get_config_decimal("no_socio_commission_rate", "0.10")
+        lucas_rate = get_config_decimal("lucas_commission_rate", "0.015")
+
+        for item in data.get("items", []):
+            fletero = (item.get("fletero") or "").strip()
+            if fletero:
+                upsert_maestro(FleteroMaster, fletero)
+
+            viaje = Viaje(
+                fecha=fecha_factura,
+                cliente=cliente,
+                factura=numero_factura,
+                fletero=fletero,
+                socio=bool(item.get("socio", True)),
+                ctg=(item.get("ctg") or "").strip() or None,
+                origen=(item.get("origen") or "").strip() or None,
+                destino=(item.get("destino") or "").strip() or None,
+                kilometros=to_decimal(item.get("kilometros", "0")),
+                tarifa=to_decimal(item.get("tarifa", "0")),
+                descuento=Decimal("0"),
+                kg=to_decimal(item.get("kg", "0")),
+                liquidado=False,
+                observaciones=f"Producto: {item.get('producto') or '-'} | Kg factura: {item.get('kg_bruto') or '-'}",
+            )
+            viaje.recalcular(
+                iva=iva_rate,
+                socio_rate=socio_rate,
+                no_socio_rate=no_socio_rate,
+                lucas_rate=lucas_rate,
+            )
+            db.session.add(viaje)
+
+    db.session.commit()
+    sincronizar_factura_por_numero(numero_factura)
+    db.session.commit()
+
+    return factura
 
 
 def ensure_schema():
@@ -1675,6 +1895,25 @@ def configuracion():
     return render_template("configuracion.html", config=config)
 
 
+@app.route("/configuracion/reset-datos", methods=["POST"])
+@login_required
+def resetear_datos_operativos():
+    password = (request.form.get("password_reset") or "").strip()
+    if password != "BORRAR2026":
+        flash("Contraseña incorrecta para borrar datos.", "warning")
+        return redirect(url_for("configuracion"))
+
+    try:
+        with db.session.begin():
+            db.session.execute(text("TRUNCATE TABLE pago_aplicaciones, saldos_favor, liquidacion_items, liquidacion_descuentos, liquidacion_pagos, liquidaciones_fletero, facturas, pagos, viajes, caja_movimientos, cuotas_seguros RESTART IDENTITY CASCADE"))
+        flash("Se borraron todos los datos operativos. El sistema quedó listo para arrancar de cero.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"No se pudieron borrar los datos: {exc}", "warning")
+
+    return redirect(url_for("configuracion"))
+
+
 @app.route("/recalcular", methods=["POST"])
 @login_required
 def recalcular_todo():
@@ -1806,6 +2045,63 @@ def facturas():
             "saldo_favor_total": saldo_favor_total,
         },
     )
+
+
+@app.route("/facturas/importar-pdf", methods=["GET", "POST"])
+@login_required
+def importar_factura_pdf():
+    preview = session.get("factura_pdf_preview")
+
+    if request.method == "POST":
+        archivo = request.files.get("archivo_pdf")
+        if not archivo or not archivo.filename:
+            flash("Seleccioná un PDF de factura.", "warning")
+            return redirect(url_for("importar_factura_pdf"))
+
+        if not archivo.filename.lower().endswith(".pdf"):
+            flash("El archivo debe ser PDF.", "warning")
+            return redirect(url_for("importar_factura_pdf"))
+
+        try:
+            parsed = parse_factura_pdf(archivo)
+            session["factura_pdf_preview"] = parsed
+            flash("Factura leída correctamente. Revisá la vista previa antes de importar.", "success")
+        except Exception as exc:
+            session.pop("factura_pdf_preview", None)
+            flash(f"No se pudo leer la factura: {exc}", "warning")
+
+        return redirect(url_for("importar_factura_pdf"))
+
+    return render_template("factura_importar_pdf.html", preview=preview)
+
+
+@app.route("/facturas/importar-pdf/confirmar", methods=["POST"])
+@login_required
+def confirmar_importacion_factura_pdf():
+    preview = session.get("factura_pdf_preview")
+    if not preview:
+        flash("No hay ninguna factura pendiente de importar.", "warning")
+        return redirect(url_for("importar_factura_pdf"))
+
+    accion = request.form.get("accion", "factura_y_viajes")
+    crear_viajes = accion == "factura_y_viajes"
+
+    try:
+        factura = crear_factura_y_viajes_desde_importacion(preview, crear_viajes=crear_viajes)
+        session.pop("factura_pdf_preview", None)
+        flash("Factura importada correctamente.", "success")
+        return redirect(url_for("detalle_factura", factura_id=factura.id))
+    except Exception as exc:
+        flash(f"No se pudo importar la factura: {exc}", "warning")
+        return redirect(url_for("importar_factura_pdf"))
+
+
+@app.route("/facturas/importar-pdf/cancelar", methods=["POST"])
+@login_required
+def cancelar_importacion_factura_pdf():
+    session.pop("factura_pdf_preview", None)
+    flash("Vista previa descartada.", "success")
+    return redirect(url_for("importar_factura_pdf"))
 @app.route("/cobranzas")
 @login_required
 def cobranzas():
