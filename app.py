@@ -561,7 +561,6 @@ def parse_amount_from_lines(lines, keyword):
                 return parse_local_decimal(nums[-1])
     return Decimal("0")
 
-
 def parse_factura_pdf(file_storage):
     reader = PdfReader(file_storage)
     layout_pages = [page.extract_text(extraction_mode="layout") or "" for page in reader.pages]
@@ -569,7 +568,7 @@ def parse_factura_pdf(file_storage):
 
     layout_text = "\n".join(layout_pages)
     compact_text = normalize_spaces(" ".join(raw_pages))
-    layout_lines = [line.strip() for line in layout_text.splitlines()]
+    layout_lines = [line.strip() for line in layout_text.splitlines() if line.strip()]
 
     numero_factura = extract_first_match(r"N[º°]\s*([0-9]{4}-[0-9]{8})", layout_text)
     fecha_factura = parse_date_safe(extract_first_match(r"FECHA:\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})", layout_text, default=""))
@@ -577,13 +576,14 @@ def parse_factura_pdf(file_storage):
 
     cliente = normalize_spaces(extract_first_match(r"SEÑOR/ES:\s*(.*?)\s*Cliente Nº:", layout_text, flags=re.S, default=""))
     cliente_numero = extract_first_match(r"Cliente Nº:\s*([0-9\.]+)", layout_text, default="")
-    cuit_cliente = extract_first_match(r"([0-9]{2}-[0-9]{8}-[0-9])C\.U\.I\.T\.", layout_text, default="")
+    cuit_cliente = extract_first_match(r"([0-9]{2}-[0-9]{8}-[0-9])", layout_text, default="")
     condicion_pago = extract_first_match(r"Condición de Pago:\s*(.*?)\s*Fecha de Vencimiento", layout_text, flags=re.S, default="")
 
     subtotal = parse_amount_from_lines(layout_lines, "Subtotal")
     iva = parse_amount_from_lines(layout_lines, "I.V.A. INSC %")
     percepciones = parse_amount_from_lines(layout_lines, "PERC. IIBB")
     impuesto = parse_amount_from_lines(layout_lines, "IMPUESTO")
+
     total = Decimal("0")
     for line in layout_lines:
         if "TOTAL" in line and "$" in line:
@@ -610,7 +610,8 @@ def parse_factura_pdf(file_storage):
             continue
 
         fletero_raw, origen, destino, km, kg_raw, producto, tarifa_raw = detail.groups()
-        fletero = normalize_title_keep_upper(fletero_raw)
+
+        fletero = normalize_title_keep_upper(fletero_raw.replace("Socio ", "").strip())
         origen = normalize_title_keep_upper(origen)
         destino = normalize_title_keep_upper(destino)
         producto = normalize_title_keep_upper(producto)
@@ -625,7 +626,7 @@ def parse_factura_pdf(file_storage):
             "origen": origen,
             "destino": destino,
             "kilometros": int(km),
-            "kg": float(kg_tn),
+            "kg": str(kg_tn),
             "kg_bruto": kg_raw,
             "producto": producto,
             "tarifa": str(tarifa),
