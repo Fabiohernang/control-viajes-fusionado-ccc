@@ -88,7 +88,7 @@
 <div class="admin-panel mb-4">
   <div class="admin-panel-title d-flex justify-content-between align-items-center">
     <span>Viajes detectados</span>
-    <span class="panel-counter">{{ preview.items|length }} resultado{{ '' if preview.items|length == 1 else 's' }}</span>
+    <span class="panel-counter">{{ preview["items"]|length }} resultado{{ '' if preview["items"]|length == 1 else 's' }}</span>
   </div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0 admin-table">
@@ -106,7 +106,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for item in preview.items %}
+        {% for item in preview["items"] %}
         <tr>
           <td><strong>{{ item.fletero }}</strong></td>
           <td>{{ item.origen }}</td>
