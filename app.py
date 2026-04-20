@@ -98,6 +98,7 @@ class Viaje(db.Model):
     ctg = db.Column(db.String(50), nullable=True)
     origen = db.Column(db.String(120), nullable=True)
     destino = db.Column(db.String(120), nullable=True)
+    producto = db.Column(db.String(120), nullable=True)
     kilometros = db.Column(db.Numeric(12, 2), nullable=True)
     tarifa = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     descuento = db.Column(db.Numeric(12, 4), nullable=False, default=0)
