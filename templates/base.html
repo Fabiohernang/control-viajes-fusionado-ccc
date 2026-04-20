@@ -64,15 +64,6 @@
       ('cambiar_contrasena', 'Contraseña')
     ]
   }
-  ,{
-    'key': 'ccc',
-    'label': 'EESS',
-    'icon': 'bi-journal-text',
-    'url': url_for('ccc_index'),
-    'links': [
-      ('ccc_index', 'Cuenta corriente')
-    ]
-  }
 ] %}
 
 {% set active_group = 'inicio' %}
@@ -82,8 +73,6 @@
   {% set active_group = 'fleteros' %}
 {% elif endpoint in ['reportes', 'exportar_reporte_lucas'] %}
   {% set active_group = 'reportes' %}
-{% elif endpoint in ['ccc_index'] %}
-  {% set active_group = 'ccc' %}
 {% elif endpoint in ['configuracion', 'cambiar_contrasena'] %}
   {% set active_group = 'config' %}
 {% elif endpoint in ['tarifario'] %}
@@ -116,59 +105,59 @@
       </a>
     </div>
 
-      <div class="top-actions">
-        <form method="post" action="{{ url_for('logout') }}" class="m-0">
-          <button class="btn btn-sm btn-outline-light" type="submit">
-            <i class="bi bi-box-arrow-right me-1"></i> Salir
-          </button>
-        </form>
-      </div>
+    <div class="top-actions">
+      <form method="post" action="{{ url_for('logout') }}" class="m-0">
+        <button class="btn btn-sm btn-outline-light" type="submit">
+          <i class="bi bi-box-arrow-right me-1"></i> Salir
+        </button>
+      </form>
     </div>
+  </div>
 
-    <nav class="primary-nav">
-      {% for group in nav_groups %}
-        <a href="{{ group.url }}"
-           class="primary-nav-btn {% if active_group == group.key %}active{% endif %}">
-          <i class="bi {{ group.icon }}"></i>
-          <span>{{ group.label }}</span>
-        </a>
-      {% endfor %}
-    </nav>
+  <nav class="primary-nav">
+    {% for group in nav_groups %}
+      <a href="{{ group.url }}"
+         class="primary-nav-btn {% if active_group == group.key %}active{% endif %}">
+        <i class="bi {{ group.icon }}"></i>
+        <span>{{ group.label }}</span>
+      </a>
+    {% endfor %}
+  </nav>
 
-    <div class="secondary-nav-wrap">
-      {% for group in nav_groups %}
-        {% if active_group == group.key %}
-          <div class="secondary-nav active">
-            {% for ep, label in group["links"] %}
-              <a
-                href="{{ url_for(ep) }}"
-                class="secondary-nav-link {% if endpoint == ep %}active{% endif %}">
-                {{ label }}
-              </a>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-  </header>
+  <div class="secondary-nav-wrap">
+    {% for group in nav_groups %}
+      {% if active_group == group.key %}
+        <div class="secondary-nav active">
+          {% for ep, label in group["links"] %}
+            <a
+              href="{{ url_for(ep) }}"
+              class="secondary-nav-link {% if endpoint == ep %}active{% endif %}">
+              {{ label }}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</header>
 
-  <main class="portal-main">
-    <div class="portal-content">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="flash-stack mb-4">
-            {% for category, message in messages %}
-              <div class="alert alert-{{ 'warning' if category == 'warning' else 'success' if category == 'success' else 'info' }} mb-2" role="alert">
-                {{ message }}
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
+<main class="portal-main">
+  <div class="portal-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack mb-4">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ 'warning' if category == 'warning' else 'success' if category == 'success' else 'info' }} mb-2" role="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
 
-      {% block content %}{% endblock %}
-    </div>
-  </main>
+    {% block content %}{% endblock %}
+  </div>
+</main>
 
 </body>
 </html>
