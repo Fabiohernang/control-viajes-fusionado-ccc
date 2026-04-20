@@ -742,6 +742,10 @@ def ensure_schema():
                 ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE
             """))
             conn.execute(text("""
+                ALTER TABLE viajes
+                ADD COLUMN IF NOT EXISTS producto VARCHAR(120)
+            """))
+            conn.execute(text("""
                 UPDATE facturas
                 SET percepciones = 0
                 WHERE percepciones IS NULL
