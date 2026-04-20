@@ -656,7 +656,6 @@ def parse_factura_pdf(file_storage):
 
     return parsed
 
-
 def crear_factura_y_viajes_desde_importacion(data, crear_viajes=True):
     numero_factura = (data.get("numero_factura") or "").strip()
     if Factura.query.filter_by(numero_factura=numero_factura).first():
@@ -702,12 +701,13 @@ def crear_factura_y_viajes_desde_importacion(data, crear_viajes=True):
                 ctg=(item.get("ctg") or "").strip() or None,
                 origen=(item.get("origen") or "").strip() or None,
                 destino=(item.get("destino") or "").strip() or None,
+                producto=(item.get("producto") or "").strip() or None,
                 kilometros=to_decimal(item.get("kilometros", "0")),
                 tarifa=to_decimal(item.get("tarifa", "0")),
                 descuento=Decimal("0"),
                 kg=to_decimal(item.get("kg", "0")),
                 liquidado=False,
-                observaciones=f"Producto: {item.get('producto') or '-'} | Kg factura: {item.get('kg_bruto') or '-'}",
+                observaciones=f"Importado desde PDF | Kg factura: {item.get('kg_bruto') or '-'}",
             )
             viaje.recalcular(
                 iva=iva_rate,
