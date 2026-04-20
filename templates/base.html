@@ -29,6 +29,7 @@
     'links': [
       ('cobranzas', 'Análisis'),
       ('facturas', 'Facturas'),
+      ('importar_factura_pdf', 'Importar PDF'),
       ('pagos', 'Pagos'),
       ('caja', 'Caja')
     ]
@@ -75,7 +76,7 @@
 ] %}
 
 {% set active_group = 'inicio' %}
-{% if endpoint in ['facturas', 'detalle_factura', 'editar_percepciones', 'pagos', 'nuevo_pago', 'editar_pago', 'cobranzas', 'caja'] %}
+{% if endpoint in ['facturas', 'detalle_factura', 'editar_percepciones', 'importar_factura_pdf', 'confirmar_importacion_factura_pdf', 'cancelar_importacion_factura_pdf', 'pagos', 'nuevo_pago', 'editar_pago', 'cobranzas', 'caja'] %}
   {% set active_group = 'cobranzas' %}
 {% elif endpoint in ['liquidaciones', 'nueva_liquidacion', 'editar_liquidacion', 'detalle_liquidacion', 'pagar_liquidacion', 'buscar_pagos_fleteros', 'editar_pago_liquidacion', 'eliminar_pago_liquidacion', 'recibo_liquidacion', 'cuotas_seguros', 'editar_cuota_seguro'] %}
   {% set active_group = 'fleteros' %}
