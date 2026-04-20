@@ -38,4 +38,25 @@
     </form>
   </div>
 </div>
+
+<div class="card border-danger shadow-sm mt-4">
+  <div class="card-body">
+    <h5 class="text-danger mb-2">Zona peligrosa</h5>
+    <p class="text-secondary">Esto borra todos los datos operativos cargados hasta el momento y deja el sistema listo para arrancar de cero. No toca usuarios, configuración, productores, fleteros ni tarifario.</p>
+
+    <form method="post" action="{{ url_for('resetear_datos_operativos') }}" onsubmit="return confirm('¿Seguro que querés borrar todos los datos operativos?');">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label">Contraseña de borrado</label>
+          <input class="form-control" type="password" name="password_reset" placeholder="Ingresá BORRAR2026" required>
+        </div>
+        <div class="col-md-6">
+          <button class="btn btn-danger" type="submit">
+            <i class="bi bi-trash me-1"></i> Borrar datos operativos
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}
