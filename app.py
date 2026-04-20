@@ -3121,6 +3121,7 @@ def hydrate_viaje(viaje, form):
     viaje.ctg = form.get("ctg", "").strip() or None
     viaje.origen = form.get("origen", "").strip() or None
     viaje.destino = form.get("destino", "").strip() or None
+    viaje.producto = form.get("producto", "").strip() or None
     viaje.kilometros = to_decimal(form.get("kilometros", "0"))
 
     tarifa_manual = form.get("tarifa", "").strip()
@@ -3139,16 +3140,6 @@ def hydrate_viaje(viaje, form):
     viaje.kg = to_decimal(form.get("kg", "0"))
     viaje.liquidado = form.get("liquidado") == "si"
     viaje.observaciones = form.get("observaciones", "").strip() or None
-
-    upsert_maestro(Productor, viaje.cliente)
-    upsert_maestro(FleteroMaster, viaje.fletero)
-
-    viaje.recalcular(
-        iva=get_config_decimal("iva_rate", "0.21"),
-        socio_rate=get_config_decimal("socio_commission_rate", "0.06"),
-        no_socio_rate=get_config_decimal("no_socio_commission_rate", "0.10"),
-        lucas_rate=get_config_decimal("lucas_commission_rate", "0.015"),
-    )
 
 
 
