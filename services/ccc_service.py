@@ -396,7 +396,18 @@ def parse_liquidacion_pdf(file_storage):
         value = normalize_spaces(value)
         if not value:
             return Decimal("0")
-        value = value.replace(".", "").replace(",", ".")
+
+        # casos raros como 28.440.01 -> lo dejamos como 28440.01
+        if value.count(".") > 1 and "," not in value:
+            parts = value.split(".")
+            value = "".join(parts[:-1]) + "." + parts[-1]
+            return Decimal(value)
+
+        # formato AR normal: 1.234.567,89
+        if "," in value:
+            value = value.replace(".", "").replace(",", ".")
+            return Decimal(value)
+
         return Decimal(value)
 
     reader = PdfReader(file_storage)
@@ -406,115 +417,229 @@ def parse_liquidacion_pdf(file_storage):
 
     print("====== LINEAS LIQUIDACION PDF ======")
     for idx, line in enumerate(lines[:80], start=1):
-         print(f"{idx:02d}: {line}")
+        print(f"{idx:02d}: {line}")
     print("====== FIN LINEAS LIQUIDACION PDF ======")
 
-    numero = " "
-    fecha = " "
-    fletero = " "
+    numero = ""
+    fecha = ""
+    fletero = ""
     total_bruto = Decimal("0")
     items = []
 
-    # -------- cabecera --------
-    for i, line in enumerate(lines):
-        upper = line.upper()
+    # -----------------------------
+    # CABECERA
+    # -----------------------------
 
-        if line == "Número:" and i + 1 < len(lines):
-            numero = lines[i + 1]
-        elif line.startswith("Número:"):
-            numero = normalize_spaces(line.replace("Número:", "").strip())
+    # número tipo 0007-00007918
+    m_num = re.search(r"\b\d{4}-\d{8}\b", text)
+    if m_num:
+        numero = m_num.group(0)
 
-        if line == "Fecha :" and i + 1 < len(lines):
-            fecha = lines[i + 1]
-        elif line.startswith("Fecha"):
-            m_fecha = re.search(r"(\d{1,2}/\d{1,2}/\d{4})", line)
-            if m_fecha:
-                fecha = m_fecha.group(1)
-
-        if upper == "NOMBRE" and i + 1 < len(lines):
-            fletero = lines[i + 1]
-
-    # -------- total --------
-    for i, line in enumerate(lines):
-        if line.upper() == "TOTAL" and i + 1 < len(lines):
-            total_bruto = parse_local_decimal(lines[i + 1])
+    # fecha principal: buscamos una fecha "sola" en una línea
+    for line in lines:
+        if re.fullmatch(r"\d{1,2}/\d{1,2}/\d{4}", line):
+            fecha = line
             break
 
-    # -------- items --------
+    # fletero: en tu log viene pegado en la línea de Tipo Resp / CUIT
+    for line in lines:
+        if "Tipo Resp." in line and "/CUIT" in line:
+            after = line.split("/CUIT", 1)[1].strip()
+            # cortamos antes de que arranquen números/CUIT
+            after = re.sub(r"\s+\d.*$", "", after).strip(" -:")
+            if after:
+                fletero = after.title()
+                break
+
+    # fallback por si no lo encontró
+    if not fletero:
+        for idx, line in enumerate(lines):
+            if line.lower() == "nombre" and idx + 1 < len(lines):
+                posible = lines[idx + 1].strip()
+                if posible.lower() not in ("domicilio", "localidad", "tipo resp.", "tipo resp. /cuit"):
+                    fletero = posible.title()
+                    break
+
+    # -----------------------------
+    # ITEMS
+    # Formato real detectado:
+    # 14: INGENIERO WHITE 27/3/2026 00:00:00
+    # 15: Hilger, German Cliente: Chofer: Mercaderia: PERTICARA BASILIO WALTER TRIGOcampo 28.440.01 354,72 175,00 897.103,40 25750 10130535246
+    # -----------------------------
     i = 0
     while i < len(lines):
         line = lines[i]
 
-        # renglón con fecha + destino
-        m_fecha_dest = re.match(r"^(\d{1,2}/\d{1,2}/\d{4})\s+00:00:00\s+(.+)$", line)
-        if not m_fecha_dest:
+        # línea destino + fecha hora
+        m_dest = re.match(r"^(.*?)\s+(\d{1,2}/\d{1,2}/\d{4})\s+00:00:00$", line)
+        if not m_dest:
             i += 1
             continue
 
-        fecha_item = m_fecha_dest.group(1)
-        destino = normalize_spaces(m_fecha_dest.group(2))
+        destino = normalize_spaces(m_dest.group(1))
+        fecha_salida = m_dest.group(2)
 
-        if i + 2 >= len(lines):
+        if i + 1 >= len(lines):
             i += 1
             continue
 
-        linea_cliente = lines[i + 1]
-        linea_datos = lines[i + 2]
+        detalle = lines[i + 1]
 
-        # Línea cliente / chofer / mercadería
-        m_cli = re.search(
-            r"Cliente:\s*(.*?)\s+Chofer:\s*(.*?)\s+Mercadería:\s*(.*)$",
-            linea_cliente,
-            re.IGNORECASE
-        )
+        # tiene que terminar en CTG largo
+        m_ctg = re.search(r"(\d{8,})\s*$", detalle)
+        if not m_ctg:
+            i += 1
+            continue
 
-        # Línea nro viaje / ctg / origen / kilos / tarifa / kms / importe
-        m_det = re.match(
-            r"^(\d+)\s+(\d+)\s+([A-Z]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)$",
-            linea_datos
-        )
+        ctg = m_ctg.group(1)
 
-        if m_cli and m_det:
+        # cliente = lo que viene antes de "Cliente:"
+        cliente = ""
+        m_cli = re.match(r"^(.*?)\s+Cliente:", detalle, re.IGNORECASE)
+        if m_cli:
             cliente = normalize_spaces(m_cli.group(1))
-            chofer = normalize_spaces(m_cli.group(2))
-            mercaderia = normalize_spaces(m_cli.group(3))
 
-            nro_viaje = m_det.group(1)
-            ctg = m_det.group(2)
-            origen = normalize_spaces(m_det.group(3))
-            kilos = parse_local_decimal(m_det.group(4))
-            tarifa = parse_local_decimal(m_det.group(5))
-            kms = parse_local_decimal(m_det.group(6))
-            importe = parse_local_decimal(m_det.group(7))
+        # parte numérica al final
+        numeric_tokens = re.findall(r"\d[\d\.,]*", detalle)
 
-            items.append({
-                "fecha": fecha_item,
-                "destino": destino,
-                "cliente": cliente,
-                "chofer": chofer,
-                "fletero": chofer,
-                "mercaderia": mercaderia,
-                "nro_viaje": nro_viaje,
-                "ctg": ctg,
-                "origen": origen,
-                "kg": kilos,
-                "tarifa": tarifa,
-                "kms": kms,
-                "importe": importe,
-            })
-            i += 3
-            continue
+        # esperamos algo como:
+        # [..., tarifa?, kms, importe, kilos, ctg]
+        kilos = Decimal("0")
+        importe = Decimal("0")
+        kms = Decimal("0")
+        tarifa = Decimal("0")
 
-        i += 1
+        if len(numeric_tokens) >= 4:
+            # último = ctg
+            # penúltimo = kilos
+            # antepenúltimo = importe
+            # cuarto desde el final = kms
+            # quinto desde el final = tarifa (si existe)
+            try:
+                kilos = parse_local_decimal(numeric_tokens[-2])
+            except Exception:
+                kilos = Decimal("0")
 
-    # si no agarró el nombre de arriba, usamos el chofer del primer item
-    if not fletero and items:
-        fletero = items[0]["fletero"]
+            try:
+                importe = parse_local_decimal(numeric_tokens[-3])
+            except Exception:
+                importe = Decimal("0")
 
-    return {
+            try:
+                kms = parse_local_decimal(numeric_tokens[-4])
+            except Exception:
+                kms = Decimal("0")
+
+            if len(numeric_tokens) >= 5:
+                try:
+                    tarifa = parse_local_decimal(numeric_tokens[-5])
+                except Exception:
+                    tarifa = Decimal("0")
+
+        # texto intermedio después de Mercaderia:
+        chofer = ""
+        mercaderia = ""
+        origen = ""
+
+        parte_post_merc = ""
+        m_post = re.search(r"Mercaderia:\s*(.*)$", detalle, re.IGNORECASE)
+        if m_post:
+            parte_post_merc = m_post.group(1)
+
+        # recortamos la parte numérica del final
+        if numeric_tokens:
+            first_num = re.search(r"\d[\d\.,]*", parte_post_merc)
+            if first_num:
+                parte_texto = parte_post_merc[:first_num.start()].strip()
+            else:
+                parte_texto = parte_post_merc.strip()
+        else:
+            parte_texto = parte_post_merc.strip()
+
+        upper_texto = parte_texto.upper()
+
+        productos = ["TRIGO", "MAIZ", "SOJA", "GIRASOL", "CEBADA", "SORGO"]
+        producto_encontrado = None
+        pos_producto = -1
+
+        for prod in productos:
+            pos = upper_texto.find(prod)
+            if pos != -1:
+                producto_encontrado = prod
+                pos_producto = pos
+                break
+
+        if producto_encontrado:
+            chofer = normalize_spaces(parte_texto[:pos_producto]).title()
+            mercaderia = producto_encontrado.title()
+
+            resto = upper_texto[pos_producto + len(producto_encontrado):].strip()
+            if "CAMPO" in resto:
+                origen = "CAMPO"
+        else:
+            chofer = normalize_spaces(parte_texto).title()
+
+        item = {
+            "fecha": fecha_salida,
+            "cliente": cliente,
+            "fletero": fletero or chofer,
+            "chofer": chofer,
+            "mercaderia": mercaderia,
+            "producto": mercaderia,
+            "origen": origen,
+            "destino": destino,
+            "ctg": ctg,
+            "kg": str(kilos),
+            "tarifa": str(tarifa),
+            "kilometros": str(kms),
+            "importe": str(importe),
+            "importe_total": str(importe),
+        }
+        items.append(item)
+        i += 2
+
+    # -----------------------------
+    # TOTAL BRUTO
+    # En tu PDF aparece una línea con el bruto antes de "Bonificación"
+    # Si no, tomamos el mayor importe monetario del bloque final
+    # -----------------------------
+    bruto_encontrado = False
+
+    for idx, line in enumerate(lines):
+        if "Bonificación" in line:
+            m_bruto = re.search(r"(\d{1,3}(?:\.\d{3})*,\d{2})", line)
+            if m_bruto:
+                total_bruto = parse_local_decimal(m_bruto.group(1))
+                bruto_encontrado = True
+                break
+            elif idx > 0:
+                prev = lines[idx - 1]
+                m_prev = re.search(r"(\d{1,3}(?:\.\d{3})*,\d{2})", prev)
+                if m_prev:
+                    total_bruto = parse_local_decimal(m_prev.group(1))
+                    bruto_encontrado = True
+                    break
+
+    if not bruto_encontrado:
+        money_values = []
+        for line in lines:
+            for m in re.findall(r"\d{1,3}(?:\.\d{3})*,\d{2}", line):
+                try:
+                    money_values.append(parse_local_decimal(m))
+                except Exception:
+                    pass
+        if money_values:
+            total_bruto = max(money_values)
+
+    parsed = {
         "numero": numero,
         "fecha": fecha,
         "fletero": fletero,
         "items": items,
         "total_bruto": total_bruto,
     }
+
+    print("=== PARSE LIQUIDACION ===")
+    print(parsed)
+
+    return parsed
