@@ -3475,6 +3475,21 @@ def ccc_save_message():
         "ok": True,
         "template": texto,
     })
+
+@app.route("/fix-db")
+def fix_db():
+    from sqlalchemy import text
+
+    queries = [
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS fecha DATE;",
+        "UPDATE viajes SET fecha = CURRENT_DATE WHERE fecha IS NULL;"
+    ]
+
+    for q in queries:
+        db.session.execute(text(q))
+
+    db.session.commit()
+    return "Base de datos actualizada"
 # =========================
 # INIT
 # =========================
