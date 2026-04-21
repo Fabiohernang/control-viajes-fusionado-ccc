@@ -2356,6 +2356,36 @@ def editar_percepciones(factura_id):
     flash("Percepciones actualizadas.", "success")
     return redirect(url_for("detalle_factura", factura_id=factura.id))
 
+@app.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
+@login_required
+def importar_liquidacion_pdf():
+    if request.method == "POST":
+        f = request.files.get("archivo")
+
+        if not f:
+            flash("Subí un archivo PDF", "warning")
+            return redirect(url_for("importar_liquidacion_pdf"))
+
+        try:
+            data = parse_liquidacion_pdf(f)
+
+            # DEBUG (para ver si funciona)
+            print("=== PARSE LIQUIDACION ===")
+            print(data)
+
+            flash("PDF procesado correctamente", "success")
+
+            return render_template(
+                "liquidacion_preview.html",
+                data=data
+            )
+
+        except Exception as e:
+            print("ERROR:", e)
+            flash("Error procesando PDF", "danger")
+            return redirect(url_for("importar_liquidacion_pdf"))
+
+    return render_template("importar_liquidacion.html")
 
 @app.route("/pagos")
 @login_required
