@@ -581,14 +581,18 @@ def parse_factura_pdf(file_storage):
     impuesto = parse_amount_from_lines(layout_lines, "IMPUESTO")
 
     total = Decimal("0")
-    for line in layout_lines:
-        if "TOTAL" in line and "$" in line:
-            nums = re.findall(r"\$\s*([\d\.,]+)", line)
-            if nums:
-                total = parse_local_decimal(nums[-1])
-                break
-    if total == 0:
-        total = subtotal + iva + percepciones + impuesto
+for line in layout_lines:
+    clean = " ".join(line.strip().split())
+    upper = clean.upper()
+
+    if upper.startswith("TOTAL") or "TOTAL $" in upper:
+        matches = re.findall(r"(\d{1,3}(?:\.\d{3})*,\d{2})", clean)
+        if matches:
+            total = parse_local_decimal(matches[-1])
+            break
+
+if total == 0:
+    total = subtotal + iva + percepciones + impuesto
 
     item_pattern = re.compile(r"1,00\s+([\d\.,]+)\s+([\d\.,]+)\s*(Socio .*?)CTG:\s*(\d+)", re.S)
     detail_pattern = re.compile(
