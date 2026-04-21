@@ -544,21 +544,17 @@ def extract_first_match(pattern, text, flags=0, group=1, default=None):
 
 
 def parse_amount_from_lines(lines, keyword):
-    for idx, line in enumerate(lines):
-        if keyword not in line:
-            continue
+    keyword_upper = keyword.upper()
 
-        candidates = [line]
-        if idx + 1 < len(lines):
-            candidates.append(lines[idx + 1])
-        if idx + 2 < len(lines):
-            candidates.append(lines[idx + 2])
+    for line in lines:
+        clean = " ".join(line.strip().split())
+        upper = clean.upper()
 
-        for candidate in candidates:
-            nums = re.findall(r"\$?\s*([\d\.,]+)", candidate)
-            nums = [n for n in nums if any(ch.isdigit() for ch in n)]
-            if nums:
-                return parse_local_decimal(nums[-1])
+        if keyword_upper in upper:
+            matches = re.findall(r"(\d{1,3}(?:\.\d{3})*,\d{2})", clean)
+            if matches:
+                return parse_local_decimal(matches[-1])
+
     return Decimal("0")
 
 def parse_factura_pdf(file_storage):
