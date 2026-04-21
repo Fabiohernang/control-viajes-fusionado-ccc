@@ -42,3 +42,232 @@
   <div class="col-lg-3 col-md-6">
     <div class="card kpi-card kpi-accent-green">
       <div class="card-body">
+        <div class="kpi-label">Cobrado</div>
+        <div class="kpi-money">{{ stats.total_cobrado|ars if stats and stats.total_cobrado is defined else '$ 0,00' }}</div>
+        <div class="kpi-sub">Pagos registrados</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-red">
+      <div class="card-body">
+        <div class="kpi-label">Pendiente de cobrar</div>
+        <div class="kpi-money">{{ stats.total_pendiente|ars if stats and stats.total_pendiente is defined else '$ 0,00' }}</div>
+        <div class="kpi-sub">Saldo de facturas</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-yellow">
+      <div class="card-body">
+        <div class="kpi-label">Liquidaciones</div>
+        <div class="kpi-value">{{ stats.cantidad_liquidaciones if stats and stats.cantidad_liquidaciones is defined else 0 }}</div>
+        <div class="kpi-sub">Cargadas</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Pagado a fleteros</div>
+        <div class="kpi-money">{{ stats.total_pagado_fleteros|ars if stats and stats.total_pagado_fleteros is defined else '$ 0,00' }}</div>
+        <div class="kpi-sub">Pagos liquidados</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-dark">
+      <div class="card-body">
+        <div class="kpi-label">Comisiones</div>
+        <div class="kpi-money">{{ stats.total_comisiones|ars if stats and stats.total_comisiones is defined else '$ 0,00' }}</div>
+        <div class="kpi-sub">Margen cargado</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Comisión Lucas</div>
+        <div class="kpi-money">{{ stats.total_comision_lucas|ars if stats and stats.total_comision_lucas is defined else '$ 0,00' }}</div>
+        <div class="kpi-sub">Calculada sobre viajes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="admin-panel h-100">
+      <div class="admin-panel-title d-flex justify-content-between align-items-center">
+        <span>Últimas facturas</span>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('facturas') }}">Ver todas</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 admin-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Factura</th>
+              <th>Cliente</th>
+              <th class="text-end">Total</th>
+              <th class="text-end">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in ultimas_facturas %}
+            <tr>
+              <td>{{ f.fecha.strftime('%d/%m/%Y') }}</td>
+              <td>
+                <a href="{{ url_for('detalle_factura', factura_id=f.id) }}">{{ f.numero_factura }}</a>
+              </td>
+              <td>{{ f.cliente }}</td>
+              <td class="text-end amount-cell">{{ f.importe_total|ars }}</td>
+              <td class="text-end amount-cell amount-strong">{{ f.saldo_pendiente|ars }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-4 text-secondary">
+                No hay facturas cargadas todavía.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="admin-panel h-100">
+      <div class="admin-panel-title d-flex justify-content-between align-items-center">
+        <span>Viajes pendientes de liquidar</span>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('liquidaciones') }}">Ver liquidaciones</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 admin-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Fletero</th>
+              <th>Cliente</th>
+              <th>CTG</th>
+              <th class="text-end">Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in viajes_pendientes %}
+            <tr>
+              <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
+              <td>{{ v.fletero }}</td>
+              <td>{{ v.cliente }}</td>
+              <td>{{ v.ctg or '-' }}</td>
+              <td class="text-end amount-cell amount-strong">{{ v.total_importe|ars }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-4 text-secondary">
+                No hay viajes pendientes de liquidar.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="admin-panel h-100">
+      <div class="admin-panel-title d-flex justify-content-between align-items-center">
+        <span>Últimos pagos recibidos</span>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('pagos') }}">Ver pagos</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 admin-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Medio</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in ultimos_pagos %}
+            <tr>
+              <td>{{ p.fecha_pago.strftime('%d/%m/%Y') }}</td>
+              <td>{{ p.productor }}</td>
+              <td>{{ p.medio_pago or '-' }}</td>
+              <td class="text-end amount-cell amount-strong">{{ p.total_aplicable|ars }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="text-center py-4 text-secondary">
+                No hay pagos registrados todavía.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="admin-panel h-100">
+      <div class="admin-panel-title d-flex justify-content-between align-items-center">
+        <span>Últimas liquidaciones</span>
+        <a class="btn btn-sm btn-outline-light" href="{{ url_for('liquidaciones') }}">Ver todas</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 admin-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Fletero</th>
+              <th>Estado</th>
+              <th class="text-end">Neto</th>
+              <th class="text-end">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in ultimas_liquidaciones %}
+            <tr>
+              <td>{{ l.fecha.strftime('%d/%m/%Y') }}</td>
+              <td>{{ l.fletero }}</td>
+              <td>
+                {% if l.estado == 'pagada' %}
+                  <span class="badge text-bg-success">Pagada</span>
+                {% elif l.estado == 'parcial' %}
+                  <span class="badge text-bg-warning">Parcial</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">Pendiente</span>
+                {% endif %}
+              </td>
+              <td class="text-end amount-cell">{{ l.neto_pagar|ars }}</td>
+              <td class="text-end amount-cell amount-strong">{{ l.saldo_pendiente|ars }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-4 text-secondary">
+                No hay liquidaciones cargadas todavía.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
