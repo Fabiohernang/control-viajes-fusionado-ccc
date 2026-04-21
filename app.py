@@ -3476,6 +3476,12 @@ def ccc_save_message():
         "template": texto,
     })
 
+
+@app.route("/rebuild-db")
+def rebuild_db():
+    db.create_all()
+    return "Base recreada OK"
+    
 # =========================
 # INIT
 # =========================
