@@ -6,203 +6,205 @@
 <div class="module-header mb-4">
   <div class="module-header-left">
     <div class="module-title">Factura {{ factura.numero_factura }}</div>
-    <div class="module-subtitle">{{ factura.cliente }}</div>
+    <div class="module-subtitle">Detalle completo de la factura, viajes asociados y pagos aplicados</div>
   </div>
   <div class="module-header-actions">
-    <a href="{{ url_for('nuevo_pago') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i> Registrar pago
-    </a>
-    <a href="{{ url_for('facturas') }}" class="btn btn-sm btn-outline-secondary">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('facturas') }}">
       <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('pagos') }}">
+      <i class="bi bi-cash-stack me-1"></i> Ver pagos
     </a>
   </div>
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-md-2">
+  <div class="col-lg-3">
     <div class="card kpi-card kpi-accent-blue">
       <div class="card-body">
-        <div class="kpi-label">Neto</div>
-        <div class="kpi-money">{{ factura.importe_neto|ars }}</div>
+        <div class="kpi-label">Cliente</div>
+        <div class="kpi-money" style="font-size: 1rem;">{{ factura.cliente }}</div>
+        <div class="kpi-sub">Factura {{ factura.numero_factura }}</div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-2">
-    <div class="card kpi-card kpi-accent-blue">
-      <div class="card-body">
-        <div class="kpi-label">IVA</div>
-        <div class="kpi-money">{{ factura.iva|ars }}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-2">
-    <div class="card kpi-card kpi-accent-yellow">
-      <div class="card-body">
-        <div class="kpi-label">Percepciones</div>
-        <div class="kpi-money">{{ factura.percepciones|ars }}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-2">
-    <div class="card kpi-card kpi-accent-green">
-      <div class="card-body">
-        <div class="kpi-label">Pago</div>
-        <div class="kpi-money">{{ factura.pago_acumulado|ars }}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-2">
+  <div class="col-lg-3">
     <div class="card kpi-card kpi-accent-dark">
       <div class="card-body">
-        <div class="kpi-label">Retenciones</div>
-        <div class="kpi-money">{{ factura.retenciones_acumuladas|ars }}</div>
+        <div class="kpi-label">Total</div>
+        <div class="kpi-money">{{ factura.importe_total|ars }}</div>
+        <div class="kpi-sub">{{ factura.cantidad_viajes }} viaje{{ '' if factura.cantidad_viajes == 1 else 's' }}</div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-2">
-    <div class="card kpi-card kpi-accent-red">
+  <div class="col-lg-3">
+    <div class="card kpi-card kpi-accent-green">
       <div class="card-body">
-        <div class="kpi-label">Restante</div>
+        <div class="kpi-label">Aplicado</div>
+        <div class="kpi-money">{{ factura.total_aplicado|ars }}</div>
+        <div class="kpi-sub">Pagos + retenciones</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3">
+    <div class="card kpi-card {% if factura.vencida %}kpi-accent-red{% else %}kpi-accent-yellow{% endif %}">
+      <div class="card-body">
+        <div class="kpi-label">Saldo pendiente</div>
         <div class="kpi-money">{{ factura.saldo_pendiente|ars }}</div>
+        <div class="kpi-sub">
+          {% if factura.vencida %}
+            Vencida hace {{ factura.dias_vencida }} día{{ '' if factura.dias_vencida == 1 else 's' }}
+          {% else %}
+            Estado {{ factura.estado_pago }}
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="admin-panel mb-4">
-  <div class="admin-panel-title">Datos generales</div>
+  <div class="admin-panel-title">Cabecera de factura</div>
   <div class="admin-panel-body">
     <div class="row g-3">
       <div class="col-md-3">
-        <div class="kpi-label">Fecha factura</div>
-        <div><strong>{{ factura.fecha.strftime('%d/%m/%Y') }}</strong></div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="kpi-label">Vencimiento</div>
-        <div><strong>{{ factura.fecha_vencimiento.strftime('%d/%m/%Y') }}</strong></div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="kpi-label">Estado</div>
-        <div>
-          {% if factura.estado_pago == 'pagada' %}
-            <span class="badge text-bg-success">Pagada</span>
-          {% elif factura.estado_pago == 'parcial' %}
-            <span class="badge text-bg-warning">Parcial</span>
-          {% else %}
-            <span class="badge text-bg-secondary">Pendiente</span>
-          {% endif %}
+        <div class="summary-block">
+          <div class="summary-label">Fecha</div>
+          <div class="summary-money" style="font-size: 1rem;">{{ factura.fecha.strftime('%d/%m/%Y') }}</div>
         </div>
       </div>
 
       <div class="col-md-3">
-        <div class="kpi-label">Total factura</div>
-        <div><strong>{{ factura.importe_total|ars }}</strong></div>
+        <div class="summary-block">
+          <div class="summary-label">Vencimiento</div>
+          <div class="summary-money" style="font-size: 1rem;">{{ factura.fecha_vencimiento.strftime('%d/%m/%Y') }}</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="summary-block">
+          <div class="summary-label">Estado</div>
+          <div style="margin-top: 6px;">
+            {% if factura.estado_pago == 'pagada' %}
+              <span class="badge text-bg-success">Pagada</span>
+            {% elif factura.estado_pago == 'parcial' %}
+              <span class="badge text-bg-warning">Parcial</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Pendiente</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="summary-block">
+          <div class="summary-label">Último pago</div>
+          <div class="summary-money" style="font-size: 1rem;">
+            {{ factura.ultima_fecha_pago.strftime('%d/%m/%Y') if factura.ultima_fecha_pago else '-' }}
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
-<div class="admin-panel mb-4">
-  <div class="admin-panel-title">Editar percepciones</div>
-  <div class="admin-panel-body">
-    <form method="post" action="{{ url_for('editar_percepciones', factura_id=factura.id) }}" class="row g-3">
-      <div class="col-md-4">
-        <label class="form-label">Percepciones</label>
-        <input class="form-control" type="number" step="0.01" min="0" name="percepciones" value="{{ factura.percepciones }}">
+    <div class="summary-divider my-3"></div>
+
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="summary-block">
+          <div class="summary-label">Importe neto</div>
+          <div class="summary-money">{{ factura.importe_neto|ars }}</div>
+        </div>
       </div>
 
-      <div class="col-md-4 d-flex align-items-end">
-        <button class="btn btn-primary w-100" type="submit">
-          <i class="bi bi-save me-1"></i> Guardar percepciones
-        </button>
+      <div class="col-md-3">
+        <div class="summary-block">
+          <div class="summary-label">IVA</div>
+          <div class="summary-money">{{ factura.iva|ars }}</div>
+        </div>
       </div>
-    </form>
+
+      <div class="col-md-3">
+        <div class="summary-block">
+          <div class="summary-label">Percepciones</div>
+          <div class="summary-money">{{ factura.percepciones|ars }}</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="summary-block">
+          <div class="summary-label">Total</div>
+          <div class="summary-money">{{ factura.importe_total|ars }}</div>
+        </div>
+      </div>
+    </div>
+
+    {% if factura.observaciones %}
+    <div class="summary-divider my-3"></div>
+    <div>
+      <div class="summary-label">Observaciones</div>
+      <div class="text-secondary">{{ factura.observaciones }}</div>
+    </div>
+    {% endif %}
   </div>
 </div>
 
-{% if saldos_favor_cliente %}
 <div class="admin-panel mb-4">
-  <div class="admin-panel-title">Saldos a favor del cliente</div>
-  <div class="admin-panel-body">
-    <ul class="mb-0 ps-3">
-      {% for saldo in saldos_favor_cliente %}
-      <li>{{ saldo.importe|ars }} · generado {{ saldo.created_at.strftime('%d/%m/%Y') }}</li>
-      {% endfor %}
-    </ul>
+  <div class="admin-panel-title d-flex justify-content-between align-items-center">
+    <span>Viajes asociados</span>
+    <span class="panel-counter">{{ viajes|length }} resultado{{ '' if viajes|length == 1 else 's' }}</span>
   </div>
-</div>
-{% endif %}
 
-<div class="admin-panel mb-4">
-  <div class="admin-panel-title">Pagos aplicados</div>
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0 admin-table">
-      <thead>
-        <tr>
-          <th>Fecha de pago</th>
-          <th>Cliente</th>
-          <th class="text-end">Pago</th>
-          <th class="text-end">Retenciones</th>
-          <th class="text-end">Total aplicado</th>
-          <th>Observaciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for app in factura.aplicaciones %}
-        <tr>
-          <td>{{ app.pago.fecha_pago.strftime('%d/%m/%Y') }}</td>
-          <td>{{ app.pago.productor }}</td>
-          <td class="text-end amount-cell">{{ app.importe_pago|ars }}</td>
-          <td class="text-end amount-cell">{{ app.importe_retenciones|ars }}</td>
-          <td class="text-end amount-cell amount-strong">{{ app.total_aplicado|ars }}</td>
-          <td>{{ app.pago.observaciones or '-' }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="text-center py-4 text-secondary">Todavía no tiene pagos aplicados.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="admin-panel">
-  <div class="admin-panel-title">Viajes vinculados</div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0 admin-table">
       <thead>
         <tr>
           <th>Fecha</th>
           <th>Fletero</th>
+          <th>Producto</th>
           <th>Origen</th>
           <th>Destino</th>
-          <th class="text-end">KG</th>
-          <th class="text-end">Neto</th>
-          <th class="text-end">Total + IVA</th>
+          <th>CTG</th>
+          <th class="text-end">Km</th>
+          <th class="text-end">Kg</th>
+          <th class="text-end">Tarifa</th>
+          <th class="text-end">Importe</th>
+          <th class="text-end">Comisión</th>
+          <th class="text-end">Acciones</th>
         </tr>
       </thead>
       <tbody>
-        {% for viaje in viajes %}
+        {% for v in viajes %}
         <tr>
-          <td>{{ viaje.fecha.strftime('%d/%m/%Y') }}</td>
-          <td>{{ viaje.fletero }}</td>
-          <td>{{ viaje.origen or '-' }}</td>
-          <td>{{ viaje.destino or '-' }}</td>
-          <td class="text-end amount-cell">{{ viaje.kg }}</td>
-          <td class="text-end amount-cell">{{ viaje.total_importe|ars }}</td>
-          <td class="text-end amount-cell amount-strong">{{ viaje.importe_con_iva|ars }}</td>
+          <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
+          <td>
+            <div class="fw-bold">{{ v.fletero }}</div>
+            <div class="small text-secondary">
+              {% if v.socio %}Socio{% else %}No socio{% endif %}
+            </div>
+          </td>
+          <td>{{ v.producto or '-' }}</td>
+          <td>{{ v.origen or '-' }}</td>
+          <td>{{ v.destino or '-' }}</td>
+          <td>{{ v.ctg or '-' }}</td>
+          <td class="text-end amount-cell">{{ v.kilometros or '-' }}</td>
+          <td class="text-end amount-cell">{{ v.kg }}</td>
+          <td class="text-end amount-cell">{{ v.tarifa }}</td>
+          <td class="text-end amount-cell amount-strong">{{ v.total_importe|ars }}</td>
+          <td class="text-end amount-cell">{{ v.comision|ars }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_viaje', viaje_id=v.id) }}">
+              Editar
+            </a>
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center py-4 text-secondary">No hay viajes vinculados.</td>
+          <td colspan="12" class="text-center py-4 text-secondary">
+            No hay viajes asociados a esta factura.
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -210,22 +212,72 @@
   </div>
 </div>
 
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title d-flex justify-content-between align-items-center">
+    <span>Pagos aplicados</span>
+    <span class="panel-counter">{{ factura.aplicaciones|length }} resultado{{ '' if factura.aplicaciones|length == 1 else 's' }}</span>
+  </div>
 
-<div class="admin-panel mt-4">
-  <div class="admin-panel-body">
-    {% if not factura.aplicaciones %}
-    <form method="post" action="{{ url_for('eliminar_factura', factura_id=factura.id) }}"
-          onsubmit="return confirm('¿Eliminar esta factura? No se puede deshacer.');">
-      <button type="submit" class="btn btn-outline-danger btn-sm">
-        <i class="bi bi-trash me-1"></i> Eliminar factura
-      </button>
-    </form>
-    {% else %}
-    <p class="text-muted small mb-0">
-      <i class="bi bi-lock me-1"></i> No se puede eliminar: tiene {{ factura.aplicaciones|length }} pago{{ 's' if factura.aplicaciones|length != 1 else '' }} aplicado{{ 's' if factura.aplicaciones|length != 1 else '' }}.
-    </p>
-    {% endif %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Medio</th>
+          <th>Número / referencia</th>
+          <th class="text-end">Importe pago</th>
+          <th class="text-end">Retenciones</th>
+          <th class="text-end">Total aplicado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in factura.aplicaciones %}
+        <tr>
+          <td>{{ a.pago.fecha_pago.strftime('%d/%m/%Y') if a.pago and a.pago.fecha_pago else '-' }}</td>
+          <td>{{ a.pago.productor if a.pago else '-' }}</td>
+          <td>{{ a.pago.medio_pago if a.pago else '-' }}</td>
+          <td>{{ a.pago.numero_referencia if a.pago and a.pago.numero_referencia else '-' }}</td>
+          <td class="text-end amount-cell">{{ a.importe_pago|ars }}</td>
+          <td class="text-end amount-cell">{{ a.importe_retenciones|ars }}</td>
+          <td class="text-end amount-cell amount-strong">{{ a.total_aplicado|ars }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center py-4 text-secondary">
+            No hay pagos aplicados todavía.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
+
+{% if saldos_favor_cliente %}
+<div class="admin-panel">
+  <div class="admin-panel-title">Saldos a favor del cliente</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Observaciones</th>
+          <th class="text-end">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in saldos_favor_cliente %}
+        <tr>
+          <td>{{ s.created_at.strftime('%d/%m/%Y') if s.created_at else '-' }}</td>
+          <td>{{ s.observaciones or '-' }}</td>
+          <td class="text-end amount-cell amount-strong">{{ s.importe|ars }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}
