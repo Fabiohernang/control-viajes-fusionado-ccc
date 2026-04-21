@@ -400,9 +400,14 @@ def parse_liquidacion_pdf(file_storage):
         return Decimal(value)
 
     reader = PdfReader(file_storage)
-    raw_pages = [page.extract_text() or "" for page in reader.pages]
-    text = "\n".join(raw_pages)
-    lines = [normalize_spaces(line) for line in text.splitlines() if normalize_spaces(line)]
+raw_pages = [page.extract_text() or "" for page in reader.pages]
+text = "\n".join(raw_pages)
+lines = [normalize_spaces(line) for line in text.splitlines() if normalize_spaces(line)]
+
+print("====== LINEAS LIQUIDACION PDF ======")
+for idx, line in enumerate(lines[:80], start=1):
+    print(f"{idx:02d}: {line}")
+print("====== FIN LINEAS LIQUIDACION PDF ======")
 
     numero = ""
     fecha = ""
