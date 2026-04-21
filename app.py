@@ -3476,6 +3476,37 @@ def ccc_save_message():
         "template": texto,
     })
 
+@app.route("/fix-db")
+def fix_db():
+    from sqlalchemy import text
+
+    queries = [
+        # columnas nuevas
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS fecha DATE;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS cliente TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS factura TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS producto TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS origen TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS destino TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS ctg TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS socio BOOLEAN;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS km NUMERIC;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS tarifa NUMERIC;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS kg NUMERIC;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS liquidado BOOLEAN;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS observaciones TEXT;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS comision NUMERIC;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS comision_lucas NUMERIC;",
+        "ALTER TABLE viajes ADD COLUMN IF NOT EXISTS total NUMERIC;"
+    ]
+
+    for q in queries:
+        db.session.execute(text(q))
+
+    db.session.commit()
+    return "Base de datos actualizada OK"
+
+
 # =========================
 # INIT
 # =========================
