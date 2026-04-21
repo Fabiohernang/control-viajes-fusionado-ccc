@@ -6,109 +6,92 @@
 <div class="module-header mb-4">
   <div class="module-header-left">
     <div class="module-title">Panel principal</div>
-    <div class="module-subtitle">Resumen operativo del circuito factura → viaje → liquidación → pago</div>
-  </div>
-  <div class="module-header-actions">
-    <a class="btn btn-sm btn-primary" href="{{ url_for('importar_factura_pdf') }}">
-      <i class="bi bi-file-earmark-arrow-up me-1"></i> Importar factura PDF
-    </a>
-    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('nuevo_viaje') }}">
-      <i class="bi bi-plus-circle me-1"></i> Nuevo viaje manual
-    </a>
+    <div class="module-subtitle">Resumen general del mes y alertas del sistema</div>
   </div>
 </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-blue">
-      <div class="card-body">
-        <div class="kpi-label">Viajes</div>
-        <div class="kpi-value">{{ stats.cantidad_viajes if stats and stats.cantidad_viajes is defined else 0 }}</div>
-        <div class="kpi-sub">Cargados en el sistema</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-dark">
-      <div class="card-body">
-        <div class="kpi-label">Facturado</div>
-        <div class="kpi-money">{{ stats.total_facturado|ars if stats and stats.total_facturado is defined else '$ 0,00' }}</div>
-        <div class="kpi-sub">Total emitido</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-green">
-      <div class="card-body">
-        <div class="kpi-label">Cobrado</div>
-        <div class="kpi-money">{{ stats.total_cobrado|ars if stats and stats.total_cobrado is defined else '$ 0,00' }}</div>
-        <div class="kpi-sub">Pagos registrados</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-red">
-      <div class="card-body">
-        <div class="kpi-label">Pendiente de cobrar</div>
-        <div class="kpi-money">{{ stats.total_pendiente|ars if stats and stats.total_pendiente is defined else '$ 0,00' }}</div>
-        <div class="kpi-sub">Saldo de facturas</div>
-      </div>
-    </div>
-  </div>
+{% if alertas %}
+<div class="mb-4">
+  {% for alerta in alertas %}
+  <div class="alert alert-warning mb-2">{{ alerta }}</div>
+  {% endfor %}
 </div>
+{% endif %}
 
 <div class="row g-3 mb-4">
   <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-yellow">
+    <div class="card kpi-card">
       <div class="card-body">
-        <div class="kpi-label">Liquidaciones</div>
-        <div class="kpi-value">{{ stats.cantidad_liquidaciones if stats and stats.cantidad_liquidaciones is defined else 0 }}</div>
-        <div class="kpi-sub">Cargadas</div>
+        <div class="kpi-label">Viajes del mes</div>
+        <div class="kpi-value">{{ stats.cantidad_viajes_mes }}</div>
+        <div class="kpi-sub">
+          {% if stats.cantidad_viajes_mes_anterior > 0 %}
+            vs mes anterior: {{ stats.variacion_viajes }}%
+          {% else %}
+            Sin base comparativa
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
 
   <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-blue">
+    <div class="card kpi-card">
       <div class="card-body">
-        <div class="kpi-label">Pagado a fleteros</div>
-        <div class="kpi-money">{{ stats.total_pagado_fleteros|ars if stats and stats.total_pagado_fleteros is defined else '$ 0,00' }}</div>
-        <div class="kpi-sub">Pagos liquidados</div>
+        <div class="kpi-label">Facturado en el mes</div>
+        <div class="kpi-money">{{ stats.total_facturado_mes|ars }}</div>
+        <div class="kpi-sub">Facturas emitidas este mes</div>
       </div>
     </div>
   </div>
 
   <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-dark">
+    <div class="card kpi-card">
       <div class="card-body">
-        <div class="kpi-label">Comisiones</div>
-        <div class="kpi-money">{{ stats.total_comisiones|ars if stats and stats.total_comisiones is defined else '$ 0,00' }}</div>
-        <div class="kpi-sub">Margen cargado</div>
+        <div class="kpi-label">Cobrado en el mes</div>
+        <div class="kpi-money">{{ stats.total_cobrado_mes|ars }}</div>
+        <div class="kpi-sub">Pagos recibidos</div>
       </div>
     </div>
   </div>
 
   <div class="col-lg-3 col-md-6">
-    <div class="card kpi-card kpi-accent-green">
+    <div class="card kpi-card">
       <div class="card-body">
-        <div class="kpi-label">Comisión Lucas</div>
-        <div class="kpi-money">{{ stats.total_comision_lucas|ars if stats and stats.total_comision_lucas is defined else '$ 0,00' }}</div>
-        <div class="kpi-sub">Calculada sobre viajes</div>
+        <div class="kpi-label">Falta cobrar</div>
+        <div class="kpi-money">{{ stats.total_pendiente|ars }}</div>
+        <div class="kpi-sub">Saldo pendiente total</div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="row g-3 mb-4">
+  <div class="col-lg-4 col-md-6">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Pagado a fleteros en el mes</div>
+        <div class="kpi-money">{{ stats.total_pagado_fleteros_mes|ars }}</div>
+        <div class="kpi-sub">Pagos registrados en liquidaciones</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-md-6">
+    <div class="card kpi-card">
+      <div class="card-body">
+        <div class="kpi-label">Viajes pendientes de liquidar</div>
+        <div class="kpi-value">{{ stats.viajes_pendientes }}</div>
+        <div class="kpi-sub">Requieren liquidación</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
   <div class="col-lg-6">
     <div class="admin-panel h-100">
-      <div class="admin-panel-title d-flex justify-content-between align-items-center">
-        <span>Últimas facturas</span>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('facturas') }}">Ver todas</a>
-      </div>
+      <div class="admin-panel-title">Últimas facturas</div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 admin-table">
           <thead>
@@ -124,18 +107,14 @@
             {% for f in ultimas_facturas %}
             <tr>
               <td>{{ f.fecha.strftime('%d/%m/%Y') }}</td>
-              <td>
-                <a href="{{ url_for('detalle_factura', factura_id=f.id) }}">{{ f.numero_factura }}</a>
-              </td>
+              <td><a href="{{ url_for('detalle_factura', factura_id=f.id) }}">{{ f.numero_factura }}</a></td>
               <td>{{ f.cliente }}</td>
-              <td class="text-end amount-cell">{{ f.importe_total|ars }}</td>
-              <td class="text-end amount-cell amount-strong">{{ f.saldo_pendiente|ars }}</td>
+              <td class="text-end">{{ f.importe_total|ars }}</td>
+              <td class="text-end">{{ f.saldo_pendiente|ars }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="5" class="text-center py-4 text-secondary">
-                No hay facturas cargadas todavía.
-              </td>
+              <td colspan="5" class="text-center py-4 text-secondary">No hay facturas cargadas todavía.</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -146,10 +125,7 @@
 
   <div class="col-lg-6">
     <div class="admin-panel h-100">
-      <div class="admin-panel-title d-flex justify-content-between align-items-center">
-        <span>Viajes pendientes de liquidar</span>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('liquidaciones') }}">Ver liquidaciones</a>
-      </div>
+      <div class="admin-panel-title">Viajes pendientes de liquidar</div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 admin-table">
           <thead>
@@ -168,99 +144,11 @@
               <td>{{ v.fletero }}</td>
               <td>{{ v.cliente }}</td>
               <td>{{ v.ctg or '-' }}</td>
-              <td class="text-end amount-cell amount-strong">{{ v.total_importe|ars }}</td>
+              <td class="text-end">{{ v.total_importe|ars }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="5" class="text-center py-4 text-secondary">
-                No hay viajes pendientes de liquidar.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3">
-  <div class="col-lg-6">
-    <div class="admin-panel h-100">
-      <div class="admin-panel-title d-flex justify-content-between align-items-center">
-        <span>Últimos pagos recibidos</span>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('pagos') }}">Ver pagos</a>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 admin-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Cliente</th>
-              <th>Medio</th>
-              <th class="text-end">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in ultimos_pagos %}
-            <tr>
-              <td>{{ p.fecha_pago.strftime('%d/%m/%Y') }}</td>
-              <td>{{ p.productor }}</td>
-              <td>{{ p.medio_pago or '-' }}</td>
-              <td class="text-end amount-cell amount-strong">{{ p.total_aplicable|ars }}</td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="4" class="text-center py-4 text-secondary">
-                No hay pagos registrados todavía.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-6">
-    <div class="admin-panel h-100">
-      <div class="admin-panel-title d-flex justify-content-between align-items-center">
-        <span>Últimas liquidaciones</span>
-        <a class="btn btn-sm btn-outline-light" href="{{ url_for('liquidaciones') }}">Ver todas</a>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 admin-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Fletero</th>
-              <th>Estado</th>
-              <th class="text-end">Neto</th>
-              <th class="text-end">Saldo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for l in ultimas_liquidaciones %}
-            <tr>
-              <td>{{ l.fecha.strftime('%d/%m/%Y') }}</td>
-              <td>{{ l.fletero }}</td>
-              <td>
-                {% if l.estado == 'pagada' %}
-                  <span class="badge text-bg-success">Pagada</span>
-                {% elif l.estado == 'parcial' %}
-                  <span class="badge text-bg-warning">Parcial</span>
-                {% else %}
-                  <span class="badge text-bg-secondary">Pendiente</span>
-                {% endif %}
-              </td>
-              <td class="text-end amount-cell">{{ l.neto_pagar|ars }}</td>
-              <td class="text-end amount-cell amount-strong">{{ l.saldo_pendiente|ars }}</td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="5" class="text-center py-4 text-secondary">
-                No hay liquidaciones cargadas todavía.
-              </td>
+              <td colspan="5" class="text-center py-4 text-secondary">No hay viajes pendientes de liquidar.</td>
             </tr>
             {% endfor %}
           </tbody>
