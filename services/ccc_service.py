@@ -383,3 +383,51 @@ def ccc_format_message(vencimiento_texto=None):
     plantilla = ccc_get_message_template()
     vencimiento_texto = (vencimiento_texto or "").strip() or "[COMPLETAR]"
     return plantilla.replace("{VENCIMIENTO}", vencimiento_texto)
+
+def parse_liquidacion_pdf(file_storage):
+    import re
+    from decimal import Decimal
+    from PyPDF2 import PdfReader
+
+    def normalize_spaces(s):
+        return " ".join((s or "").split())
+
+    def parse_local_decimal(txt):
+        if not txt:
+            return Decimal("0")
+        txt = txt.replace(".", "").replace(",", ".")
+        return Decimal(txt)
+
+    reader = PdfReader(file_storage)
+    text = "\n".join([(p.extract_text() or "") for p in reader.pages])
+    text = normalize_spaces(text)
+
+    fletero = ""
+    m_flet = re.search(r"(Socio|Fletero)\s*[:\-]?\s*([A-ZÁÉÍÓÚÑ\s]+)", text, re.I)
+    if m_flet:
+        fletero = normalize_spaces(m_flet.group(2).title())
+
+    items = []
+    for m in re.finditer(
+        r"CTG[:\s]*([0-9]{6,})[^$]*?([\d\.,]+)\s*kg[^$]*?\$?\s*([\d\.,]+)",
+        text, re.I
+    ):
+        ctg = m.group(1)
+        kg = parse_local_decimal(m.group(2))
+        importe = parse_local_decimal(m.group(3))
+        items.append({
+            "ctg": ctg,
+            "kg": kg,
+            "importe": importe
+        })
+
+    total_bruto = Decimal("0")
+    m_tot = re.search(r"Total\s*[:\s]*\$?\s*([\d\.,]+)", text, re.I)
+    if m_tot:
+        total_bruto = parse_local_decimal(m_tot.group(1))
+
+    return {
+        "fletero": fletero,
+        "items": items,
+        "total_bruto": total_bruto
+    }
