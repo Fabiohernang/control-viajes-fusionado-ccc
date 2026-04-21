@@ -2375,9 +2375,23 @@ def importar_liquidacion_pdf():
 
             flash("PDF procesado correctamente", "success")
 
+            resultados = []
+
+            for item in data.get("items", []):
+                ctg = (item.get("ctg") or "").strip()
+
+                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
+
+                resultados.append({
+                    "item": item,
+                    "coincidencias": coincidencias,
+                    "cantidad": len(coincidencias),
+                })
+
             return render_template(
                 "liquidacion_preview.html",
-                data=data
+                data=data,
+                resultados=resultados
             )
 
         except Exception as e:
