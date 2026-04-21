@@ -444,12 +444,13 @@ def parse_liquidacion_pdf(file_storage):
     # fletero: en tu log viene pegado en la línea de Tipo Resp / CUIT
     for line in lines:
         if "Tipo Resp." in line and "/CUIT" in line:
-            after = line.split("/CUIT", 1)[1].strip()
-            # cortamos antes de que arranquen números/CUIT
-            after = re.sub(r"\s+\d.*$", "", after).strip(" -:")
-            if after:
-                fletero = after.title()
-                break
+            m_flet = re.search(r"/CUIT\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)", line)
+            if m_flet:
+                posible = normalize_spaces(m_flet.group(1))
+                posible = re.sub(r"\s+\d.*$", "", posible).strip(" -:")
+                if posible:
+                    fletero = posible.title()
+                    break
 
     # fallback por si no lo encontró
     if not fletero:
