@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Preview</h2>
+
+<p><strong>Fletero:</strong> {{ data.fletero }}</p>
+<p><strong>Total:</strong> {{ data.total_bruto }}</p>
+
+<table border="1">
+  <tr>
+    <th>CTG</th>
+    <th>KG</th>
+    <th>Importe</th>
+  </tr>
+
+  {% for item in data.items %}
+  <tr>
+    <td>{{ item.ctg }}</td>
+    <td>{{ item.kg }}</td>
+    <td>{{ item.importe }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}
