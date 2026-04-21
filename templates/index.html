@@ -1,183 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Panel de viajes{% endblock %}
+{% block title %}Inicio{% endblock %}
 
 {% block content %}
-<div class="hero-panel mb-4">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-    <div>
-      <h1 class="page-title mb-1">Panel de viajes</h1>
-    </div>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('nuevo_viaje') }}" class="btn btn-primary">+ Nuevo viaje</a>
-      <form method="post" action="{{ url_for('recalcular_todo') }}">
-        <button type="submit" class="btn btn-outline-secondary">Recalcular todo</button>
-      </form>
-    </div>
+
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Panel principal</div>
+    <div class="module-subtitle">Resumen operativo del circuito factura → viaje → liquidación → pago</div>
+  </div>
+  <div class="module-header-actions">
+    <a class="btn btn-sm btn-primary" href="{{ url_for('importar_factura_pdf') }}">
+      <i class="bi bi-file-earmark-arrow-up me-1"></i> Importar factura PDF
+    </a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('nuevo_viaje') }}">
+      <i class="bi bi-plus-circle me-1"></i> Nuevo viaje manual
+    </a>
   </div>
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-md-2">
-    <div class="card kpi-card">
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-blue">
       <div class="card-body">
-        <div class="kpi-label">Cantidad</div>
-        <div class="kpi-value">{{ stats.cantidad }}</div>
+        <div class="kpi-label">Viajes</div>
+        <div class="kpi-value">{{ stats.cantidad_viajes if stats and stats.cantidad_viajes is defined else 0 }}</div>
+        <div class="kpi-sub">Cargados en el sistema</div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-2">
-    <div class="card kpi-card">
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-dark">
       <div class="card-body">
-        <div class="kpi-label">Total importe</div>
-        <div class="kpi-money">{{ stats.total_importe|ars }}</div>
+        <div class="kpi-label">Facturado</div>
+        <div class="kpi-money">{{ stats.total_facturado|ars if stats and stats.total_facturado is defined else '$ 0,00' }}</div>
+        <div class="kpi-sub">Total emitido</div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-2">
-    <div class="card kpi-card">
+  <div class="col-lg-3 col-md-6">
+    <div class="card kpi-card kpi-accent-green">
       <div class="card-body">
-        <div class="kpi-label">Importe + IVA</div>
-        <div class="kpi-money">{{ stats.importe_con_iva|ars }}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-2">
-    <div class="card kpi-card">
-      <div class="card-body">
-        <div class="kpi-label">Comisiones</div>
-        <div class="kpi-money">{{ stats.total_comision|ars }}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-2">
-    <div class="card kpi-card">
-      <div class="card-body">
-        <div class="kpi-label">Comisión Lucas</div>
-        <div class="kpi-money">{{ stats.total_comision_lucas|ars }}</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-2">
-    <div class="card kpi-card">
-      <div class="card-body">
-        <div class="kpi-label">Pend. / Liq.</div>
-        <div class="kpi-value">{{ stats.pendientes }} / {{ stats.liquidados }}</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="card shadow-sm mb-4 app-card">
-  <div class="card-body">
-    <form method="get" class="row g-3">
-      <div class="col-md-3">
-        <label class="form-label">Buscar</label>
-        <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="cliente, fletero, factura, ctg...">
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">Cliente</label>
-        <input class="form-control" type="text" name="cliente" value="{{ cliente }}">
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">Fletero</label>
-        <input class="form-control" type="text" name="fletero" value="{{ fletero }}">
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">Mes</label>
-        <input class="form-control" type="month" name="month" value="{{ month }}">
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">Estado</label>
-        <select class="form-select" name="estado">
-          <option value="">Todos</option>
-          <option value="pendiente" {% if estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
-          <option value="liquidado" {% if estado == 'liquidado' %}selected{% endif %}>Liquidado</option>
-        </select>
-      </div>
-
-      <div class="col-12 d-flex gap-2">
-        <button class="btn btn-dark" type="submit">Filtrar</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('index') }}">Limpiar</a>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="card shadow-sm app-card">
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>Fecha</th>
-          <th>Cliente</th>
-          <th>Factura</th>
-          <th>Fletero</th>
-          <th>Socio</th>
-          <th>Origen</th>
-          <th>Destino</th>
-          <th>KG</th>
-          <th>Total</th>
-          <th>+ IVA</th>
-          <th>Comisión</th>
-          <th>Comisión Lucas</th>
-          <th>Estado</th>
-          <th class="text-end">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for viaje in viajes %}
-        <tr>
-          <td>{{ viaje.fecha.strftime('%d/%m/%Y') }}</td>
-          <td>{{ viaje.cliente }}</td>
-          <td>{{ viaje.factura or '-' }}</td>
-          <td>{{ viaje.fletero }}</td>
-          <td>{{ viaje.socio|si_no }}</td>
-          <td>{{ viaje.origen or '-' }}</td>
-          <td>{{ viaje.destino or '-' }}</td>
-          <td>{{ viaje.kg }}</td>
-          <td>{{ viaje.total_importe|ars }}</td>
-          <td>{{ viaje.importe_con_iva|ars }}</td>
-          <td>{{ viaje.comision|ars }}</td>
-          <td>{{ viaje.comision_lucas|ars }}</td>
-          <td>
-            {% if viaje.liquidado %}
-              <span class="badge text-bg-success">Liquidado</span>
-            {% else %}
-              <span class="badge text-bg-warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td class="text-end">
-            <div class="d-inline-flex gap-2">
-              <a href="{{ url_for('editar_viaje', viaje_id=viaje.id) }}" class="btn btn-sm btn-outline-primary">Editar</a>
-
-              <form method="post" action="{{ url_for('toggle_liquidado', viaje_id=viaje.id) }}">
-                <button class="btn btn-sm btn-outline-secondary" type="submit">
-                  {% if viaje.liquidado %}Pasar a pendiente{% else %}Liquidar{% endif %}
-                </button>
-              </form>
-
-              <form method="post" action="{{ url_for('eliminar_viaje', viaje_id=viaje.id) }}" onsubmit="return confirm('¿Eliminar este viaje?');">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="14" class="text-center py-4 text-secondary">No hay viajes cargados.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endblock %}
