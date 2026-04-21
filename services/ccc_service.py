@@ -575,8 +575,13 @@ def parse_liquidacion_pdf(file_storage):
             mercaderia = producto_encontrado.title()
 
             resto = upper_texto[pos_producto + len(producto_encontrado):].strip()
-            if "CAMPO" in resto:
+
+            if resto.startswith("CAMPO") or "CAMPO" in resto:
                 origen = "CAMPO"
+            elif resto.startswith("PLANTA") or "PLANTA" in resto:
+                origen = "PLANTA"
+            elif resto.startswith("ACOPIO") or "ACOPIO" in resto:
+                origen = "ACOPIO"
         else:
             chofer = normalize_spaces(parte_texto).title()
 
