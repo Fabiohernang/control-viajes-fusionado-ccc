@@ -409,9 +409,9 @@ for idx, line in enumerate(lines[:80], start=1):
     print(f"{idx:02d}: {line}")
 print("====== FIN LINEAS LIQUIDACION PDF ======")
 
-    numero = None
-    fecha = None
-    fletero = None
+    numero = " "
+    fecha = " "
+    fletero = " "
     total_bruto = Decimal("0")
     items = []
 
