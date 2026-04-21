@@ -15,10 +15,10 @@
     'key': 'operacion',
     'label': 'Operación',
     'icon': 'bi-truck',
-    'url': url_for('tarifario'),
+    'url': url_for('index'),
     'links': [
       ('index', 'Viajes'),
-      ('tarifario', 'Tarifario')
+      ('nuevo_viaje', 'Nuevo viaje')
     ]
   },
   {
@@ -30,8 +30,7 @@
       ('cobranzas', 'Análisis'),
       ('facturas', 'Facturas'),
       ('importar_factura_pdf', 'Importar PDF'),
-      ('pagos', 'Pagos'),
-      ('caja', 'Caja')
+      ('pagos', 'Pagos')
     ]
   },
   {
@@ -41,17 +40,7 @@
     'url': url_for('liquidaciones'),
     'links': [
       ('liquidaciones', 'Liquidaciones'),
-      ('buscar_pagos_fleteros', 'Buscar cheque / pago'),
-      ('cuotas_seguros', 'Cuotas y seguros')
-    ]
-  },
-  {
-    'key': 'reportes',
-    'label': 'Reportes',
-    'icon': 'bi-bar-chart-line',
-    'url': url_for('reportes'),
-    'links': [
-      ('reportes', 'Mensuales')
+      ('buscar_pagos_fleteros', 'Buscar cheque / pago')
     ]
   },
   {
@@ -67,15 +56,13 @@
 ] %}
 
 {% set active_group = 'inicio' %}
-{% if endpoint in ['facturas', 'detalle_factura', 'editar_percepciones', 'importar_factura_pdf', 'confirmar_importacion_factura_pdf', 'cancelar_importacion_factura_pdf', 'pagos', 'nuevo_pago', 'editar_pago', 'cobranzas', 'caja'] %}
+{% if endpoint in ['facturas', 'detalle_factura', 'editar_percepciones', 'importar_factura_pdf', 'confirmar_importacion_factura_pdf', 'cancelar_importacion_factura_pdf', 'pagos', 'nuevo_pago', 'editar_pago', 'cobranzas'] %}
   {% set active_group = 'cobranzas' %}
-{% elif endpoint in ['liquidaciones', 'nueva_liquidacion', 'editar_liquidacion', 'detalle_liquidacion', 'pagar_liquidacion', 'buscar_pagos_fleteros', 'editar_pago_liquidacion', 'eliminar_pago_liquidacion', 'recibo_liquidacion', 'cuotas_seguros', 'editar_cuota_seguro'] %}
+{% elif endpoint in ['liquidaciones', 'nueva_liquidacion', 'editar_liquidacion', 'detalle_liquidacion', 'pagar_liquidacion', 'buscar_pagos_fleteros', 'editar_pago_liquidacion', 'eliminar_pago_liquidacion', 'recibo_liquidacion'] %}
   {% set active_group = 'fleteros' %}
-{% elif endpoint in ['reportes', 'exportar_reporte_lucas'] %}
-  {% set active_group = 'reportes' %}
 {% elif endpoint in ['configuracion', 'cambiar_contrasena'] %}
   {% set active_group = 'config' %}
-{% elif endpoint in ['tarifario'] %}
+{% elif endpoint in ['index', 'nuevo_viaje', 'editar_viaje'] %}
   {% set active_group = 'operacion' %}
 {% endif %}
 
