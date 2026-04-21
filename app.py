@@ -1888,6 +1888,52 @@ def toggle_liquidado(viaje_id):
     flash(f"Viaje marcado como {estado}.", "success")
     return redirect(url_for("index"))
 
+@app.route("/viajes")
+@login_required
+def viajes():
+    q = request.args.get("q", "").strip()
+
+    query = Viaje.query
+
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Viaje.cliente.ilike(like),
+                Viaje.fletero.ilike(like),
+                Viaje.ctg.ilike(like),
+                Viaje.factura.ilike(like),
+                Viaje.producto.ilike(like),
+            )
+        )
+
+    viajes = query.order_by(Viaje.fecha.desc(), Viaje.id.desc()).all()
+
+    ctg_counts = {}
+    for v in viajes:
+        if v.ctg:
+            ctg_counts[v.ctg] = ctg_counts.get(v.ctg, 0) + 1
+
+    ctg_repetidos = {k for k, cantidad in ctg_counts.items() if cantidad > 1}
+
+    total_viajes = len(viajes)
+    total_importe = quantize_money(sum((to_decimal(v.total_importe) for v in viajes), Decimal("0")))
+    pendientes_liquidar = sum(1 for v in viajes if not v.liquidado)
+
+    stats = {
+        "total_viajes": total_viajes,
+        "total_importe": total_importe,
+        "pendientes_liquidar": pendientes_liquidar,
+        "ctg_repetidos": len(ctg_repetidos),
+    }
+
+    return render_template(
+        "viajes.html",
+        viajes=viajes,
+        q=q,
+        stats=stats,
+        ctg_repetidos=ctg_repetidos,
+    )
 
 @app.route("/configuracion", methods=["GET", "POST"])
 @login_required
