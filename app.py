@@ -1607,41 +1607,93 @@ def cambiar_contrasena():
 @app.route("/")
 @login_required
 def index():
+    hoy = date.today()
+    primer_dia_mes = date(hoy.year, hoy.month, 1)
+
+    if hoy.month == 1:
+        anio_mes_anterior = hoy.year - 1
+        mes_anterior = 12
+    else:
+        anio_mes_anterior = hoy.year
+        mes_anterior = hoy.month - 1
+
     viajes = Viaje.query.order_by(Viaje.fecha.desc()).all()
     facturas = Factura.query.order_by(Factura.fecha.desc()).all()
     pagos = Pago.query.order_by(Pago.fecha_pago.desc()).all()
     liquidaciones = LiquidacionFletero.query.order_by(LiquidacionFletero.fecha.desc()).all()
 
-    total_facturado = quantize_money(sum((to_decimal(x.importe_total) for x in facturas), Decimal("0")))
-    total_cobrado = quantize_money(sum((to_decimal(x.total_aplicable) for x in pagos), Decimal("0")))
-    total_pendiente = quantize_money(sum((to_decimal(x.saldo_pendiente) for x in facturas), Decimal("0")))
-    total_pagado_fleteros = quantize_money(sum((to_decimal(x.total_pagado) for x in liquidaciones), Decimal("0")))
-    total_comisiones = quantize_money(sum((to_decimal(x.comision) for x in viajes), Decimal("0")))
-    total_comision_lucas = quantize_money(sum((to_decimal(x.comision_lucas) for x in viajes), Decimal("0")))
+    viajes_mes = [
+        v for v in viajes
+        if v.fecha and v.fecha.year == hoy.year and v.fecha.month == hoy.month
+    ]
+    viajes_mes_anterior = [
+        v for v in viajes
+        if v.fecha and v.fecha.year == anio_mes_anterior and v.fecha.month == mes_anterior
+    ]
 
-    stats = {
-        "cantidad_viajes": len(viajes),
-        "total_facturado": total_facturado,
-        "total_cobrado": total_cobrado,
-        "total_pendiente": total_pendiente,
-        "cantidad_liquidaciones": len(liquidaciones),
-        "total_pagado_fleteros": total_pagado_fleteros,
-        "total_comisiones": total_comisiones,
-        "total_comision_lucas": total_comision_lucas,
-    }
+    facturas_mes = [
+        f for f in facturas
+        if f.fecha and f.fecha.year == hoy.year and f.fecha.month == hoy.month
+    ]
+    pagos_mes = [
+        p for p in pagos
+        if p.fecha_pago and p.fecha_pago.year == hoy.year and p.fecha_pago.month == hoy.month
+    ]
+    liquidaciones_mes = [
+        l for l in liquidaciones
+        if l.fecha and l.fecha.year == hoy.year and l.fecha.month == hoy.month
+    ]
 
+    cantidad_viajes_mes = len(viajes_mes)
+    cantidad_viajes_mes_anterior = len(viajes_mes_anterior)
+
+    variacion_viajes = 0
+    if cantidad_viajes_mes_anterior > 0:
+        variacion_viajes = round(
+            ((cantidad_viajes_mes - cantidad_viajes_mes_anterior) / cantidad_viajes_mes_anterior) * 100
+        )
+
+    total_facturado_mes = quantize_money(sum((to_decimal(f.importe_total) for f in facturas_mes), Decimal("0")))
+    total_cobrado_mes = quantize_money(sum((to_decimal(p.total_aplicable) for p in pagos_mes), Decimal("0")))
+    total_pendiente = quantize_money(sum((to_decimal(f.saldo_pendiente) for f in facturas), Decimal("0")))
+    total_pagado_fleteros_mes = quantize_money(sum((to_decimal(l.total_pagado) for l in liquidaciones_mes), Decimal("0")))
+
+    viajes_pendientes = [v for v in viajes if not v.liquidado]
     ultimas_facturas = facturas[:8]
-    viajes_pendientes = [v for v in viajes if not v.liquidado][:8]
     ultimos_pagos = pagos[:8]
     ultimas_liquidaciones = liquidaciones[:8]
+
+    ctg_counts = {}
+    for v in viajes:
+        if v.ctg:
+            ctg_counts[v.ctg] = ctg_counts.get(v.ctg, 0) + 1
+    ctg_repetidos = [k for k, n in ctg_counts.items() if n > 1]
+
+    alertas = []
+    if ctg_repetidos:
+        alertas.append(f"Hay {len(ctg_repetidos)} CTG repetido(s) para revisar.")
+    if viajes_pendientes:
+        alertas.append(f"Hay {len(viajes_pendientes)} viaje(s) pendiente(s) de liquidar.")
+
+    stats = {
+        "cantidad_viajes_mes": cantidad_viajes_mes,
+        "cantidad_viajes_mes_anterior": cantidad_viajes_mes_anterior,
+        "variacion_viajes": variacion_viajes,
+        "total_facturado_mes": total_facturado_mes,
+        "total_cobrado_mes": total_cobrado_mes,
+        "total_pendiente": total_pendiente,
+        "total_pagado_fleteros_mes": total_pagado_fleteros_mes,
+        "viajes_pendientes": len(viajes_pendientes),
+    }
 
     return render_template(
         "index.html",
         stats=stats,
         ultimas_facturas=ultimas_facturas,
-        viajes_pendientes=viajes_pendientes,
         ultimos_pagos=ultimos_pagos,
         ultimas_liquidaciones=ultimas_liquidaciones,
+        viajes_pendientes=viajes_pendientes[:8],
+        alertas=alertas,
     )
 
 
