@@ -389,45 +389,127 @@ def parse_liquidacion_pdf(file_storage):
     from decimal import Decimal
     from PyPDF2 import PdfReader
 
-    def normalize_spaces(s):
-        return " ".join((s or "").split())
+    def normalize_spaces(value):
+        return " ".join((value or "").replace("\xa0", " ").split())
 
-    def parse_local_decimal(txt):
-        if not txt:
+    def parse_local_decimal(value):
+        value = normalize_spaces(value)
+        if not value:
             return Decimal("0")
-        txt = txt.replace(".", "").replace(",", ".")
-        return Decimal(txt)
+        value = value.replace(".", "").replace(",", ".")
+        return Decimal(value)
 
     reader = PdfReader(file_storage)
-    text = "\n".join([(p.extract_text() or "") for p in reader.pages])
-    text = normalize_spaces(text)
+    raw_pages = [page.extract_text() or "" for page in reader.pages]
+    text = "\n".join(raw_pages)
+    lines = [normalize_spaces(line) for line in text.splitlines() if normalize_spaces(line)]
 
+    numero = ""
+    fecha = ""
     fletero = ""
-    m_flet = re.search(r"(Socio|Fletero)\s*[:\-]?\s*([A-ZÁÉÍÓÚÑ\s]+)", text, re.I)
-    if m_flet:
-        fletero = normalize_spaces(m_flet.group(2).title())
-
-    items = []
-    for m in re.finditer(
-        r"CTG[:\s]*([0-9]{6,})[^$]*?([\d\.,]+)\s*kg[^$]*?\$?\s*([\d\.,]+)",
-        text, re.I
-    ):
-        ctg = m.group(1)
-        kg = parse_local_decimal(m.group(2))
-        importe = parse_local_decimal(m.group(3))
-        items.append({
-            "ctg": ctg,
-            "kg": kg,
-            "importe": importe
-        })
-
     total_bruto = Decimal("0")
-    m_tot = re.search(r"Total\s*[:\s]*\$?\s*([\d\.,]+)", text, re.I)
-    if m_tot:
-        total_bruto = parse_local_decimal(m_tot.group(1))
+    items = []
+
+    # -------- cabecera --------
+    for i, line in enumerate(lines):
+        upper = line.upper()
+
+        if line == "Número:" and i + 1 < len(lines):
+            numero = lines[i + 1]
+        elif line.startswith("Número:"):
+            numero = normalize_spaces(line.replace("Número:", "").strip())
+
+        if line == "Fecha :" and i + 1 < len(lines):
+            fecha = lines[i + 1]
+        elif line.startswith("Fecha"):
+            m_fecha = re.search(r"(\d{1,2}/\d{1,2}/\d{4})", line)
+            if m_fecha:
+                fecha = m_fecha.group(1)
+
+        if upper == "NOMBRE" and i + 1 < len(lines):
+            fletero = lines[i + 1]
+
+    # -------- total --------
+    for i, line in enumerate(lines):
+        if line.upper() == "TOTAL" and i + 1 < len(lines):
+            total_bruto = parse_local_decimal(lines[i + 1])
+            break
+
+    # -------- items --------
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        # renglón con fecha + destino
+        m_fecha_dest = re.match(r"^(\d{1,2}/\d{1,2}/\d{4})\s+00:00:00\s+(.+)$", line)
+        if not m_fecha_dest:
+            i += 1
+            continue
+
+        fecha_item = m_fecha_dest.group(1)
+        destino = normalize_spaces(m_fecha_dest.group(2))
+
+        if i + 2 >= len(lines):
+            i += 1
+            continue
+
+        linea_cliente = lines[i + 1]
+        linea_datos = lines[i + 2]
+
+        # Línea cliente / chofer / mercadería
+        m_cli = re.search(
+            r"Cliente:\s*(.*?)\s+Chofer:\s*(.*?)\s+Mercadería:\s*(.*)$",
+            linea_cliente,
+            re.IGNORECASE
+        )
+
+        # Línea nro viaje / ctg / origen / kilos / tarifa / kms / importe
+        m_det = re.match(
+            r"^(\d+)\s+(\d+)\s+([A-Z]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)\s+([\d\.,]+)$",
+            linea_datos
+        )
+
+        if m_cli and m_det:
+            cliente = normalize_spaces(m_cli.group(1))
+            chofer = normalize_spaces(m_cli.group(2))
+            mercaderia = normalize_spaces(m_cli.group(3))
+
+            nro_viaje = m_det.group(1)
+            ctg = m_det.group(2)
+            origen = normalize_spaces(m_det.group(3))
+            kilos = parse_local_decimal(m_det.group(4))
+            tarifa = parse_local_decimal(m_det.group(5))
+            kms = parse_local_decimal(m_det.group(6))
+            importe = parse_local_decimal(m_det.group(7))
+
+            items.append({
+                "fecha": fecha_item,
+                "destino": destino,
+                "cliente": cliente,
+                "chofer": chofer,
+                "fletero": chofer,
+                "mercaderia": mercaderia,
+                "nro_viaje": nro_viaje,
+                "ctg": ctg,
+                "origen": origen,
+                "kg": kilos,
+                "tarifa": tarifa,
+                "kms": kms,
+                "importe": importe,
+            })
+            i += 3
+            continue
+
+        i += 1
+
+    # si no agarró el nombre de arriba, usamos el chofer del primer item
+    if not fletero and items:
+        fletero = items[0]["fletero"]
 
     return {
+        "numero": numero,
+        "fecha": fecha,
         "fletero": fletero,
         "items": items,
-        "total_bruto": total_bruto
+        "total_bruto": total_bruto,
     }
