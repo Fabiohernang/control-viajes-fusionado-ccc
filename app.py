@@ -1599,84 +1599,41 @@ def cambiar_contrasena():
 @app.route("/")
 @login_required
 def index():
-    q = request.args.get("q", "").strip()
-    cliente = request.args.get("cliente", "").strip()
-    fletero = request.args.get("fletero", "").strip()
-    estado = request.args.get("estado", "").strip()
-    month = request.args.get("month", "").strip()
+    viajes = Viaje.query.order_by(Viaje.fecha.desc()).all()
+    facturas = Factura.query.order_by(Factura.fecha.desc()).all()
+    pagos = Pago.query.order_by(Pago.fecha_pago.desc()).all()
+    liquidaciones = LiquidacionFletero.query.order_by(LiquidacionFletero.fecha.desc()).all()
 
-    query = Viaje.query
+    total_facturado = quantize_money(sum((to_decimal(x.importe_total) for x in facturas), Decimal("0")))
+    total_cobrado = quantize_money(sum((to_decimal(x.total_aplicable) for x in pagos), Decimal("0")))
+    total_pendiente = quantize_money(sum((to_decimal(x.saldo_pendiente) for x in facturas), Decimal("0")))
+    total_pagado_fleteros = quantize_money(sum((to_decimal(x.total_pagado) for x in liquidaciones), Decimal("0")))
+    total_comisiones = quantize_money(sum((to_decimal(x.comision) for x in viajes), Decimal("0")))
+    total_comision_lucas = quantize_money(sum((to_decimal(x.comision_lucas) for x in viajes), Decimal("0")))
 
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            or_(
-                Viaje.cliente.ilike(like),
-                Viaje.fletero.ilike(like),
-                Viaje.factura.ilike(like),
-                Viaje.ctg.ilike(like),
-                Viaje.origen.ilike(like),
-                Viaje.destino.ilike(like),
-            )
-        )
+    stats = {
+        "cantidad_viajes": len(viajes),
+        "total_facturado": total_facturado,
+        "total_cobrado": total_cobrado,
+        "total_pendiente": total_pendiente,
+        "cantidad_liquidaciones": len(liquidaciones),
+        "total_pagado_fleteros": total_pagado_fleteros,
+        "total_comisiones": total_comisiones,
+        "total_comision_lucas": total_comision_lucas,
+    }
 
-    if cliente:
-        query = query.filter(Viaje.cliente.ilike(f"%{cliente}%"))
-
-    if fletero:
-        query = query.filter(Viaje.fletero.ilike(f"%{fletero}%"))
-
-    if estado == "liquidado":
-        query = query.filter(Viaje.liquidado.is_(True))
-    elif estado == "pendiente":
-        query = query.filter(Viaje.liquidado.is_(False))
-
-    if month:
-        try:
-            year_part, month_part = month.split("-")
-            query = query.filter(
-                func.extract("year", Viaje.fecha) == int(year_part),
-                func.extract("month", Viaje.fecha) == int(month_part),
-            )
-        except ValueError:
-            pass
-
-    viajes = query.order_by(Viaje.fecha.desc(), Viaje.id.desc()).all()
-
-    stats_raw = query.with_entities(
-        func.count(Viaje.id),
-        func.coalesce(func.sum(Viaje.total_importe), 0),
-        func.coalesce(func.sum(Viaje.importe_con_iva), 0),
-        func.coalesce(func.sum(Viaje.comision), 0),
-        func.coalesce(func.sum(Viaje.comision_lucas), 0),
-    ).first()
-
-    cantidad = stats_raw[0] or 0
-    total_importe = stats_raw[1] or 0
-    total_con_iva = stats_raw[2] or 0
-    total_comision = stats_raw[3] or 0
-    total_comision_lucas = stats_raw[4] or 0
-
-    pendientes = query.filter(Viaje.liquidado.is_(False)).count()
-    liquidados = query.filter(Viaje.liquidado.is_(True)).count()
+    ultimas_facturas = facturas[:8]
+    viajes_pendientes = [v for v in viajes if not v.liquidado][:8]
+    ultimos_pagos = pagos[:8]
+    ultimas_liquidaciones = liquidaciones[:8]
 
     return render_template(
         "index.html",
-        viajes=viajes,
-        q=q,
-        cliente=cliente,
-        fletero=fletero,
-        estado=estado,
-        month=month,
-        stats={
-            "cantidad": cantidad,
-            "total_importe": total_importe,
-            "importe_con_iva": total_con_iva,
-            "total_comision": total_comision,
-            "total_comision_lucas": total_comision_lucas,
-            "pendientes": pendientes,
-            "liquidados": liquidados,
-        },
+        stats=stats,
+        ultimas_facturas=ultimas_facturas,
+        viajes_pendientes=viajes_pendientes,
+        ultimos_pagos=ultimos_pagos,
+        ultimas_liquidaciones=ultimas_liquidaciones,
     )
 
 
