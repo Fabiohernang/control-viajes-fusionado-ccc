@@ -1608,7 +1608,6 @@ def cambiar_contrasena():
 @login_required
 def index():
     hoy = date.today()
-    primer_dia_mes = date(hoy.year, hoy.month, 1)
 
     if hoy.month == 1:
         anio_mes_anterior = hoy.year - 1
@@ -1695,7 +1694,6 @@ def index():
         viajes_pendientes=viajes_pendientes[:8],
         alertas=alertas,
     )
-
 
 @app.route("/reportes")
 @login_required
