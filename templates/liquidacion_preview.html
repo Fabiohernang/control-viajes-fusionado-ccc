@@ -1,25 +1,55 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2>Preview</h2>
+<div class="module-header mb-4">
+  <div>
+    <div class="module-title">Preview liquidación</div>
+    <div class="module-subtitle">Revisá lo detectado antes de seguir</div>
+  </div>
+</div>
 
-<p><strong>Fletero:</strong> {{ data.fletero }}</p>
-<p><strong>Total:</strong> {{ data.total_bruto }}</p>
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Cabecera detectada</div>
+  <div class="admin-panel-body">
+    <p><strong>Número:</strong> {{ data.get("numero", "") or "-" }}</p>
+    <p><strong>Fecha:</strong> {{ data.get("fecha", "") or "-" }}</p>
+    <p><strong>Fletero:</strong> {{ data.get("fletero", "") or "-" }}</p>
+    <p><strong>Total bruto:</strong> {{ data.get("total_bruto", 0) }}</p>
+  </div>
+</div>
 
-<table border="1">
-  <tr>
-    <th>CTG</th>
-    <th>KG</th>
-    <th>Importe</th>
-  </tr>
-
-  {% for item in data.items %}
-  <tr>
-    <td>{{ item.ctg }}</td>
-    <td>{{ item.kg }}</td>
-    <td>{{ item.importe }}</td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="admin-panel">
+  <div class="admin-panel-title">Items detectados</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>CTG</th>
+          <th>Kg</th>
+          <th>Importe</th>
+          <th>Origen</th>
+          <th>Destino</th>
+          <th>Cliente</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in data.get("items", []) %}
+        <tr>
+          <td>{{ item.get("ctg", "-") }}</td>
+          <td>{{ item.get("kg", "-") }}</td>
+          <td>{{ item.get("importe", "-") }}</td>
+          <td>{{ item.get("origen", "-") }}</td>
+          <td>{{ item.get("destino", "-") }}</td>
+          <td>{{ item.get("cliente", "-") }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center py-4 text-secondary">No se detectaron items en la liquidación.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
 {% endblock %}
