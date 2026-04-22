@@ -2801,6 +2801,7 @@ def editar_cuota_seguro(item_id):
         return redirect(url_for("cuotas_seguros"))
 
     return render_template("cuota_seguro_form.html", item=item, fleteros=fleteros)
+    
 @app.route("/cuotas-seguros/<int:item_id>/agregar-liquidacion", methods=["POST"])
 @login_required
 def agregar_cuota_seguro_a_liquidacion(item_id):
