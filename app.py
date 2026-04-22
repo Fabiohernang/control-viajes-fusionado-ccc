@@ -2061,6 +2061,7 @@ def tarifario():
     total_items = Tarifario.query.count()
 
     return render_template("tarifario.html", items=items, total_items=total_items)
+
 @app.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
 @login_required
 def importar_liquidacion_pdf():
