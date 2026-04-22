@@ -1554,8 +1554,7 @@ def login():
         return redirect(url_for("index"))
 
     return render_template("login.html")
-
-
+   
 @app.route("/logout", methods=["POST"])
 @login_required
 def logout():
