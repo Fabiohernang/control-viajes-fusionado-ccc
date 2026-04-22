@@ -2061,7 +2061,37 @@ def tarifario():
     total_items = Tarifario.query.count()
 
     return render_template("tarifario.html", items=items, total_items=total_items)
+@app.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
+@login_required
+def importar_liquidacion_pdf():
+    if request.method == "POST":
+        archivo = request.files.get("archivo")
 
+        if archivo:
+            data = parse_liquidacion_pdf(archivo)
+
+            resultados = []
+
+            for item in data.get("items", []):
+                ctg = (item.get("ctg") or "").strip()
+
+                coincidencias = []
+                if ctg:
+                    coincidencias = Viaje.query.filter_by(ctg=ctg).all()
+
+                resultados.append({
+                    "item": item,
+                    "coincidencias": coincidencias,
+                    "cantidad": len(coincidencias),
+                })
+
+            return render_template(
+                "liquidacion_preview.html",
+                data=data,
+                resultados=resultados
+            )
+
+    return render_template("importar_liquidacion_pdf.html")
 
 @app.route("/facturas")
 @login_required
