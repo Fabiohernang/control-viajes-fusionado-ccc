@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Pagos{% endblock %}
+
+{% block content %}
+
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Pagos</div>
+    <div class="module-subtitle">Registro de cobranzas y medios de pago</div>
+  </div>
+  <div class="module-header-actions">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('facturas') }}">
+      <i class="bi bi-receipt me-1"></i> Facturas
+    </a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('nuevo_pago') }}">
+      <i class="bi bi-plus-circle me-1"></i> Nuevo pago
+    </a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Total ingresado</div>
+        <div class="kpi-money">{{ stats.total|ars }}</div>
+        <div class="kpi-sub">Suma del período filtrado</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Cantidad</div>
+        <div class="kpi-value">{{ stats.cantidad }}</div>
+        <div class="kpi-sub">Pagos encontrados</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Filtros</div>
+  <div class="admin-panel-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Buscar</label>
+        <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="Cliente, N° cheque, referencia...">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Medio</label>
+        <select class="form-select" name="medio">
+          <option value="">— Todos —</option>
+          <option value="Transferencia" {% if medio == 'Transferencia' %}selected{% endif %}>Transferencia</option>
+          <option value="Cheque" {% if medio == 'Cheque' %}selected{% endif %}>Cheque</option>
+          <option value="Echeq" {% if medio == 'Echeq' %}selected{% endif %}>Echeq</option>
+          <option value="Efectivo" {% if medio == 'Efectivo' %}selected{% endif %}>Efectivo</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Desde</label>
+        <input class="form-control" type="date" name="fecha_desde" value="{{ fecha_desde }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Hasta</label>
+        <input class="form-control" type="date" name="fecha_hasta" value="{{ fecha_hasta }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-dark w-100" type="submit"><i class="bi bi-funnel me-1"></i> Filtrar</button>
+      </div>
+      <div class="col-md-1">
+        <a class="btn btn-outline-secondary w-100" href="{{ url_for('pagos') }}"><i class="bi bi-x-lg"></i></a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="admin-panel">
+  <div class="admin-panel-title d-flex justify-content-between align-items-center">
+    <span>Movimientos registrados</span>
+    <span class="panel-counter">{{ items|length }} resultado{{ '' if items|length == 1 else 's' }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fecha pago</th>
+          <th>Fecha cobro</th>
+          <th>Cliente</th>
+          <th>Medio</th>
+          <th>N° / Referencia</th>
+          <th class="text-end">Importe</th>
+          <th class="text-end">Retenciones</th>
+          <th class="text-end">Total</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in items %}
+        <tr>
+          <td>{{ p.fecha_pago.strftime('%d/%m/%Y') }}</td>
+          <td>
+            {% if p.fecha_cobro_real %}{{ p.fecha_cobro_real.strftime('%d/%m/%Y') }}
+            {% else %}<span class="text-secondary">-</span>{% endif %}
+          </td>
+          <td><strong>{{ p.productor }}</strong></td>
+          <td>
+            {% if p.medio_pago in ['Cheque','Echeq'] %}<span class="badge text-bg-warning">{{ p.medio_pago }}</span>
+            {% elif p.medio_pago == 'Transferencia' %}<span class="badge text-bg-info">{{ p.medio_pago }}</span>
+            {% else %}<span class="badge text-bg-secondary">{{ p.medio_pago or '—' }}</span>{% endif %}
+          </td>
+          <td>
+            {% if p.numero_referencia %}<code class="small">{{ p.numero_referencia }}</code>
+            {% else %}<span class="text-secondary">-</span>{% endif %}
+          </td>
+          <td class="text-end amount-cell">{{ p.importe|ars }}</td>
+          <td class="text-end amount-cell">{{ p.retenciones|ars }}</td>
+          <td class="text-end amount-cell amount-strong">{{ p.total_aplicable|ars }}</td>
+          <td class="text-end">
+            <a href="{{ url_for('editar_pago', pago_id=p.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-pencil-square me-1"></i> Editar
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="text-center py-4 text-secondary">No hay pagos para los filtros seleccionados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

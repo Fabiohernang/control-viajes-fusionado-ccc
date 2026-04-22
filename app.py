@@ -1644,8 +1644,8 @@ def index():
         if p.fecha_pago and p.fecha_pago.year == hoy.year and p.fecha_pago.month == hoy.month
     ]
     liquidaciones_mes = [
-        l for l in liquidaciones
-        if l.fecha and l.fecha.year == hoy.year and l.fecha.month == hoy.month
+        liq for liq in liquidaciones
+        if liq.fecha and liq.fecha.year == hoy.year and liq.fecha.month == hoy.month
     ]
 
     cantidad_viajes_mes = len(viajes_mes)
@@ -1660,7 +1660,7 @@ def index():
     total_facturado_mes = quantize_money(sum((to_decimal(f.importe_total) for f in facturas_mes), Decimal("0")))
     total_cobrado_mes = quantize_money(sum((to_decimal(p.total_aplicable) for p in pagos_mes), Decimal("0")))
     total_pendiente = quantize_money(sum((to_decimal(f.saldo_pendiente) for f in facturas), Decimal("0")))
-    total_pagado_fleteros_mes = quantize_money(sum((to_decimal(l.total_pagado) for l in liquidaciones_mes), Decimal("0")))
+    total_pagado_fleteros_mes = quantize_money(sum((to_decimal(liq.total_pagado) for liq in liquidaciones_mes), Decimal("0")))
 
     viajes_pendientes = [v for v in viajes if not v.liquidado]
     ultimas_facturas = facturas[:8]
@@ -1849,8 +1849,6 @@ def editar_viaje(viaje_id):
         if factura_anterior:
             sincronizar_factura_por_numero(factura_anterior)
         if factura_nueva and factura_nueva != factura_anterior:
-            sincronizar_factura_por_numero(factura_nueva)
-        elif factura_nueva:
             sincronizar_factura_por_numero(factura_nueva)
 
         db.session.commit()
@@ -2065,7 +2063,7 @@ def tarifario():
     total_items = Tarifario.query.count()
 
     return render_template("tarifario.html", items=items, total_items=total_items)
-  
+
 @app.route("/facturas")
 @login_required
 def facturas():
@@ -2359,32 +2357,6 @@ def editar_percepciones(factura_id):
     flash("Percepciones actualizadas.", "success")
     return redirect(url_for("detalle_factura", factura_id=factura.id))
 
-if request.method == 'POST':
-    archivo = request.files.get('archivo')
-
-    if archivo:
-        data = parse_liquidacion_pdf(archivo)
-
-        resultados = []
-
-        for item in data.get("items", []):
-            ctg = (item.get("ctg") or "").strip()
-
-            coincidencias = []
-            if ctg:
-                coincidencias = Viaje.query.filter_by(ctg=ctg).all()
-
-            resultados.append({
-                "item": item,
-                "coincidencias": coincidencias,
-                "cantidad": len(coincidencias),
-            })
-
-        return render_template(
-            "liquidacion_preview.html",
-            data=data,
-            resultados=resultados
-        )
 
 @app.route("/pagos")
 @login_required
@@ -2805,7 +2777,7 @@ def editar_cuota_seguro(item_id):
         return redirect(url_for("cuotas_seguros"))
 
     return render_template("cuota_seguro_form.html", item=item, fleteros=fleteros)
-    
+
 @app.route("/cuotas-seguros/<int:item_id>/agregar-liquidacion", methods=["POST"])
 @login_required
 def agregar_cuota_seguro_a_liquidacion(item_id):
@@ -2957,14 +2929,14 @@ def buscar_pagos_fleteros():
         try:
             fecha_desde = datetime.strptime(fecha_desde_raw, "%Y-%m-%d").date()
             query = query.filter(LiquidacionPago.fecha >= fecha_desde)
-        except:
+        except ValueError:
             flash("Fecha desde inválida", "warning")
 
     if fecha_hasta_raw:
         try:
             fecha_hasta = datetime.strptime(fecha_hasta_raw, "%Y-%m-%d").date()
             query = query.filter(LiquidacionPago.fecha <= fecha_hasta)
-        except:
+        except ValueError:
             flash("Fecha hasta inválida", "warning")
 
     if medio:
@@ -3067,7 +3039,7 @@ def editar_liquidacion(liquidacion_id):
 
         conceptos = request.form.getlist("descuento_concepto[]")
         importes = request.form.getlist("descuento_importe[]")
-        for concepto, importe_desc in zip(conceptos, importes):
+        for concepto, importe_desc in zip(conceptos, importes, strict=False):
             concepto = (concepto or "").strip()
             importe_dec = to_decimal(importe_desc, "0")
             if concepto and importe_dec > 0:
@@ -3541,7 +3513,7 @@ def ccc_stats():
         "al_dia": al_dia,
         "total_mora": float(quantize_money(total_mora)),
     })
-    
+
 @app.route("/api/ccc/mensaje", methods=["GET"])
 @login_required
 def ccc_get_message():
@@ -3587,4 +3559,5 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug = os.getenv("FLASK_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+    app.run(debug=debug)
