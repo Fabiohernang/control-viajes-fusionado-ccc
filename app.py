@@ -2356,50 +2356,32 @@ def editar_percepciones(factura_id):
     flash("Percepciones actualizadas.", "success")
     return redirect(url_for("detalle_factura", factura_id=factura.id))
 
-@app.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
-@login_required
-def importar_liquidacion_pdf():
-    if request.method == "POST":
-        f = request.files.get("archivo")
+if request.method == 'POST':
+    archivo = request.files.get('archivo')
 
-        if not f:
-            flash("Subí un archivo PDF", "warning")
-            return redirect(url_for("importar_liquidacion_pdf"))
+    if archivo:
+        data = parse_liquidacion_pdf(archivo)
 
-        try:
-            data = parse_liquidacion_pdf(f)
+        resultados = []
 
-            # DEBUG (para ver si funciona)
-            print("=== PARSE LIQUIDACION ===")
-            print(data)
+        for item in data.get("items", []):
+            ctg = (item.get("ctg") or "").strip()
 
-            flash("PDF procesado correctamente", "success")
+            coincidencias = []
+            if ctg:
+                coincidencias = Viaje.query.filter_by(ctg=ctg).all()
 
-            resultados = []
+            resultados.append({
+                "item": item,
+                "coincidencias": coincidencias,
+                "cantidad": len(coincidencias),
+            })
 
-            for item in data.get("items", []):
-                ctg = (item.get("ctg") or "").strip()
-
-                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
-
-                resultados.append({
-                    "item": item,
-                    "coincidencias": coincidencias,
-                    "cantidad": len(coincidencias),
-                })
-
-            return render_template(
-                "liquidacion_preview.html",
-                data=data,
-                resultados=resultados
-            )
-
-        except Exception as e:
-            print("ERROR:", e)
-            flash("Error procesando PDF", "danger")
-            return redirect(url_for("importar_liquidacion_pdf"))
-
-    return render_template("importar_liquidacion.html")
+        return render_template(
+            "liquidacion_preview.html",
+            data=data,
+            resultados=resultados
+        )
 
 @app.route("/pagos")
 @login_required
