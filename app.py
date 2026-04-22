@@ -505,9 +505,6 @@ Saludos.""",
     if changed:
         db.session.commit()
 
-
-
-
 def parse_date_safe(value):
     value = (value or "").strip()
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
@@ -1504,6 +1501,14 @@ def login_required(view_func):
         return view_func(*args, **kwargs)
     return wrapper
 
+def upsert_maestro(model, nombre):
+    nombre = (nombre or "").strip()
+    if not nombre: return None
+    obj = model.query.filter_by(nombre=nombre).first()
+    if not obj:
+        obj = model(nombre=nombre)
+        db.session.add(obj)
+    return obj
 
 # =========================
 # FILTROS
