@@ -2068,17 +2068,17 @@ def importar_liquidacion_pdf():
     if request.method == "POST":
         archivo = request.files.get("archivo")
 
-        if archivo:
+        if not archivo or not archivo.filename:
+            flash("Seleccioná un PDF.", "warning")
+            return redirect(url_for("importar_liquidacion_pdf"))
+
+        try:
             data = parse_liquidacion_pdf(archivo)
 
             resultados = []
-
             for item in data.get("items", []):
                 ctg = (item.get("ctg") or "").strip()
-
-                coincidencias = []
-                if ctg:
-                    coincidencias = Viaje.query.filter_by(ctg=ctg).all()
+                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
 
                 resultados.append({
                     "item": item,
@@ -2086,14 +2086,20 @@ def importar_liquidacion_pdf():
                     "cantidad": len(coincidencias),
                 })
 
+            flash("PDF procesado correctamente", "success")
             return render_template(
                 "liquidacion_preview.html",
                 data=data,
-                resultados=resultados
+                resultados=resultados,
             )
 
-    return render_template("importar_liquidacion_pdf.html")
+        except Exception as e:
+            print("ERROR importar_liquidacion_pdf:", e)
+            flash("Error procesando PDF", "warning")
+            return redirect(url_for("importar_liquidacion_pdf"))
 
+    return render_template("importar_liquidacion_pdf.html")
+    
 @app.route("/facturas")
 @login_required
 def facturas():
