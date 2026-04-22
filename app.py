@@ -2061,45 +2061,7 @@ def tarifario():
     total_items = Tarifario.query.count()
 
     return render_template("tarifario.html", items=items, total_items=total_items)
-
-@app.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
-@login_required
-def importar_liquidacion_pdf():
-    if request.method == "POST":
-        archivo = request.files.get("archivo")
-
-        if not archivo or not archivo.filename:
-            flash("Seleccioná un PDF.", "warning")
-            return redirect(url_for("importar_liquidacion_pdf"))
-
-        try:
-            data = parse_liquidacion_pdf(archivo)
-
-            resultados = []
-            for item in data.get("items", []):
-                ctg = (item.get("ctg") or "").strip()
-                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
-
-                resultados.append({
-                    "item": item,
-                    "coincidencias": coincidencias,
-                    "cantidad": len(coincidencias),
-                })
-
-            flash("PDF procesado correctamente", "success")
-            return render_template(
-                "liquidacion_preview.html",
-                data=data,
-                resultados=resultados,
-            )
-
-        except Exception as e:
-            print("ERROR importar_liquidacion_pdf:", e)
-            flash("Error procesando PDF", "warning")
-            return redirect(url_for("importar_liquidacion_pdf"))
-
-    return render_template("importar_liquidacion_pdf.html")
-    
+  
 @app.route("/facturas")
 @login_required
 def facturas():
@@ -2988,6 +2950,45 @@ def buscar_pagos_fleteros():
         fecha_hasta=fecha_hasta_raw,
         stats=stats,
     )
+
+@app.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
+@login_required
+def importar_liquidacion_pdf():
+    if request.method == "POST":
+        archivo = request.files.get("archivo")
+
+        if not archivo or not archivo.filename:
+            flash("Seleccioná un PDF.", "warning")
+            return redirect(url_for("importar_liquidacion_pdf"))
+
+        try:
+            data = parse_liquidacion_pdf(archivo)
+
+            resultados = []
+            for item in data.get("items", []):
+                ctg = (item.get("ctg") or "").strip()
+                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
+
+                resultados.append({
+                    "item": item,
+                    "coincidencias": coincidencias,
+                    "cantidad": len(coincidencias),
+                })
+
+            flash("PDF procesado correctamente", "success")
+            return render_template(
+                "liquidacion_preview.html",
+                data=data,
+                resultados=resultados,
+            )
+
+        except Exception as e:
+            print("ERROR importar_liquidacion_pdf:", e)
+            flash("Error procesando PDF", "warning")
+            return redirect(url_for("importar_liquidacion_pdf"))
+
+    return render_template("importar_liquidacion_pdf.html")
+
 @app.route("/liquidaciones/nueva", methods=["GET", "POST"])
 @login_required
 def nueva_liquidacion():
