@@ -387,7 +387,7 @@ def ccc_format_message(vencimiento_texto=None):
 def parse_liquidacion_pdf(file_storage):
     import re
     from decimal import Decimal
-    from PyPDF2 import PdfReader
+    from pypdf import PdfReader
 
     def normalize_spaces(value):
         return " ".join((value or "").replace("\xa0", " ").split())
