@@ -2850,56 +2850,6 @@ def agregar_cuota_seguro_a_liquidacion(item_id):
     flash(f"Se agregó {concepto} en liquidación #{liquidacion.id}.", "success")
     return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
 
-
-        try:
-            fecha_hasta = datetime.strptime(fecha_hasta_raw, "%Y-%m-%d").date()
-            query = query.filter(LiquidacionPago.fecha <= fecha_hasta)
-        except ValueError:
-            flash("Fecha hasta inválida.", "warning")
-
-    if medio:
-        query = query.filter(LiquidacionPago.medio == medio)
-
-    if q:
-        like = f"%{q}%"
-        importe_buscado = None
-
-        try:
-            importe_buscado = quantize_money(to_decimal(q))
-        except Exception:
-            importe_buscado = None
-
-        filtros = [
-            LiquidacionPago.numero.ilike(like),
-            LiquidacionFletero.fletero.ilike(like),
-            LiquidacionFletero.factura_fletero.ilike(like),
-            LiquidacionPago.observaciones.ilike(like),
-        ]
-
-        if importe_buscado is not None:
-            filtros.append(LiquidacionPago.importe == importe_buscado)
-
-        query = query.filter(or_(*filtros))
-
-    items = query.order_by(LiquidacionPago.fecha.desc(), LiquidacionPago.id.desc()).all()
-
-    total = quantize_money(sum((to_decimal(x.importe) for x in items), Decimal("0")))
-
-    stats = {
-        "cantidad": len(items),
-        "total": total,
-    }
-
-    return render_template(
-        "buscar_pagos_fleteros.html",
-        items=items,
-        q=q,
-        medio=medio,
-        fecha_desde=fecha_desde_raw,
-        fecha_hasta=fecha_hasta_raw,
-        stats=stats,
-    )
-
 # =========================
 # LIQUIDACIONES
 # =========================
