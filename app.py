@@ -2969,7 +2969,6 @@ def importar_liquidacion_pdf():
 
     return render_template("importar_liquidacion_pdf.html")
 
-
 @app.route("/liquidaciones/buscar-pagos")
 @login_required
 def buscar_pagos_fleteros():
