@@ -279,7 +279,7 @@ def register_ccc_routes(app):
             "al_dia": al_dia,
             "total_mora": float(quantize_money(total_mora)),
         })
-        
+
     @app.route("/api/ccc/mensaje", methods=["GET"])
     @login_required
     def ccc_get_message():
