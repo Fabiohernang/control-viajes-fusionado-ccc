@@ -1,4 +1,5 @@
 import re
+import numbers
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -9,7 +10,7 @@ def _is_empty(value):
     if value is None:
         return True
     text = str(value).strip()
-    return text == "" or text.lower() == "nan"
+    return text == "" or text.lower() in ("nan", "nat", "none")
 
 
 def _values(row):
@@ -35,13 +36,11 @@ def _parse_date(value):
 
 
 def _is_number(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, numbers.Number) and not isinstance(value, bool)
 
 
-def _number_to_str(value):
-    if _is_number(value):
-        return str(int(value))
-    return str(value).strip()
+def _num_to_decimal(value):
+    return to_decimal(str(value), "0")
 
 
 def _read_excel(file_storage):
@@ -54,14 +53,11 @@ def _read_excel(file_storage):
 
 def parse_liquidacion_archivo(file_storage):
     filename = (getattr(file_storage, "filename", "") or "").lower()
-
     if filename.endswith(".pdf"):
         from services.ccc_service import parse_liquidacion_pdf
         return parse_liquidacion_pdf(file_storage)
-
     if filename.endswith(".xls") or filename.endswith(".xlsx"):
         return parse_liquidacion_excel(file_storage)
-
     raise ValueError("Formato no soportado. Usá Excel 8 (.xls), .xlsx o PDF.")
 
 
@@ -76,7 +72,6 @@ def parse_liquidacion_excel(file_storage):
         "items": [],
     }
 
-    # Cabecera y totales
     for _, row in df.iterrows():
         row_text = _text(row)
         vals = _values(row)
@@ -94,21 +89,15 @@ def parse_liquidacion_excel(file_storage):
                     break
 
         if not data["fletero"] and "Nombre" in row_text and len(vals) >= 2:
-            # En el Excel real aparece algo como: Nombre | 5326 | Lauman Luis Alberto
             data["fletero"] = str(vals[-1]).strip()
 
         if "Subtotal" in row_text:
             nums = [x for x in vals if _is_number(x)]
             if nums:
-                data["total_bruto"] = quantize_money(to_decimal(nums[-1]))
+                data["total_bruto"] = quantize_money(_num_to_decimal(nums[-1]))
 
-    # Viajes: el formato real usa bloques:
-    # fila técnica: origen, destino, kilos, tarifa, kms, importe
-    # fila viaje: fecha, nro viaje, CTG
-    # fila info: Cliente / Chofer / Mercadería
     for i in range(1, len(df) - 1):
-        row = df.iloc[i]
-        vals = _values(row)
+        vals = _values(df.iloc[i])
         if not vals:
             continue
 
@@ -127,12 +116,13 @@ def parse_liquidacion_excel(file_storage):
         nro_viaje = None
         ctg = None
         for number in numeric_vals:
-            text_num = str(int(number))
+            number_int = int(number)
+            text_num = str(number_int)
             if len(text_num) >= 8:
                 ctg = text_num
                 break
-            if nro_viaje is None and 1000 <= int(number) <= 999999:
-                nro_viaje = int(number)
+            if nro_viaje is None and 1000 <= number_int <= 999999:
+                nro_viaje = number_int
 
         if not ctg:
             continue
@@ -143,26 +133,13 @@ def parse_liquidacion_excel(file_storage):
         prev_texts = [str(x).strip() for x in prev_vals if isinstance(x, str) and str(x).strip()]
         prev_nums = [x for x in prev_vals if _is_number(x)]
 
-        origen = ""
-        destino = ""
-        if len(prev_texts) >= 1:
-            origen = prev_texts[0]
-        if len(prev_texts) >= 2:
-            destino = prev_texts[1]
+        origen = prev_texts[0] if len(prev_texts) >= 1 else ""
+        destino = prev_texts[1] if len(prev_texts) >= 2 else ""
 
-        kg = Decimal("0")
-        tarifa = Decimal("0")
-        kms = Decimal("0")
-        importe = Decimal("0")
-
-        if len(prev_nums) >= 1:
-            kg = to_decimal(prev_nums[0])
-        if len(prev_nums) >= 2:
-            tarifa = to_decimal(prev_nums[1])
-        if len(prev_nums) >= 3:
-            kms = to_decimal(prev_nums[2])
-        if len(prev_nums) >= 4:
-            importe = to_decimal(prev_nums[3])
+        kg = _num_to_decimal(prev_nums[0]) if len(prev_nums) >= 1 else Decimal("0")
+        tarifa = _num_to_decimal(prev_nums[1]) if len(prev_nums) >= 2 else Decimal("0")
+        kms = _num_to_decimal(prev_nums[2]) if len(prev_nums) >= 3 else Decimal("0")
+        importe = _num_to_decimal(prev_nums[3]) if len(prev_nums) >= 4 else Decimal("0")
 
         info_text = " ".join(str(x) for x in next_vals)
         cliente = ""
@@ -196,6 +173,6 @@ def parse_liquidacion_excel(file_storage):
     if not data["items"]:
         print("DEBUG parser liquidacion Excel: no se detectaron viajes")
         print("Shape:", df.shape)
-        print(df.head(30).to_string())
+        print(df.head(35).to_string())
 
     return data
