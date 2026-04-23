@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Importar liquidación PDF{% endblock %}
+
+{% block content %}
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Importar liquidación PDF</div>
+    <div class="module-subtitle">Subí un PDF de liquidación para detectar CTG y vincular viajes</div>
+  </div>
+  <div class="module-header-actions">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('liquidaciones.liquidaciones') }}">
+      <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+  </div>
+</div>
+
+<div class="admin-panel">
+  <div class="admin-panel-title">Carga de archivo</div>
+  <div class="admin-panel-body">
+    <form method="post" enctype="multipart/form-data" class="row g-3">
+      <div class="col-md-12">
+        <label class="form-label">Archivo PDF</label>
+        <input class="form-control" type="file" name="archivo" accept="application/pdf" required>
+        <div class="form-text">Seleccioná la liquidación en PDF para procesarla.</div>
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-primary" type="submit">
+          <i class="bi bi-upload me-1"></i> Procesar PDF
+        </button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('liquidaciones.liquidaciones') }}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
