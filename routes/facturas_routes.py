@@ -1,7 +1,7 @@
 import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, g
 from sqlalchemy import or_, func
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 
 from extensions import db
@@ -305,4 +305,3 @@ def editar_percepciones(factura_id):
 
     flash("Percepciones actualizadas.", "success")
     return redirect(url_for("detalle_factura", factura_id=factura.id))
-
