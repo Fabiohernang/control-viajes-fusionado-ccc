@@ -10,8 +10,8 @@ from models import (
 )
 from routes.helpers import (
     login_required, buscar_tarifa_por_km, hydrate_viaje, recalcular_liquidacion,
+    parse_liquidacion_archivo,
 )
-from services.ccc_service import parse_liquidacion_pdf
 from utils import to_decimal, quantize_money
 
 liquidaciones_bp = Blueprint("liquidaciones", __name__)
@@ -49,7 +49,7 @@ def liquidaciones():
 
 
 # =========================
-# IMPORTAR PDF
+# IMPORTAR ARCHIVO
 # =========================
 
 @liquidaciones_bp.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
@@ -60,15 +60,20 @@ def importar_liquidacion_pdf():
         archivo = request.files.get("archivo")
 
         if not archivo or not archivo.filename:
-            flash("Seleccioná un PDF.", "warning")
+            flash("Seleccioná un archivo de liquidación.", "warning")
+            return redirect(url_for("liquidaciones.importar_liquidacion_pdf"))
+
+        nombre = archivo.filename.lower()
+        if not (nombre.endswith(".pdf") or nombre.endswith(".xls") or nombre.endswith(".xlsx")):
+            flash("Formato no soportado. Subí PDF o Excel 8 (.xls/.xlsx).", "warning")
             return redirect(url_for("liquidaciones.importar_liquidacion_pdf"))
 
         try:
-            data = parse_liquidacion_pdf(archivo)
+            data = parse_liquidacion_archivo(archivo)
 
             resultados = []
             for item in data.get("items", []):
-                ctg = (item.get("ctg") or "").strip()
+                ctg = str(item.get("ctg") or "").strip()
 
                 coincidencias = []
                 if ctg:
@@ -80,7 +85,8 @@ def importar_liquidacion_pdf():
                     "cantidad": len(coincidencias),
                 })
 
-            flash("PDF procesado correctamente", "success")
+            tipo = "Excel" if nombre.endswith(".xls") or nombre.endswith(".xlsx") else "PDF"
+            flash(f"{tipo} procesado correctamente", "success")
 
             return render_template(
                 "liquidacion_preview.html",
@@ -89,8 +95,8 @@ def importar_liquidacion_pdf():
             )
 
         except Exception as e:
-            print("ERROR importar_liquidacion_pdf:", e)
-            flash("Error procesando PDF", "danger")
+            print("ERROR importar_liquidacion_archivo:", e)
+            flash(f"Error procesando archivo: {e}", "danger")
             return redirect(url_for("liquidaciones.importar_liquidacion_pdf"))
 
     return render_template("importar_liquidacion_pdf.html")
@@ -402,7 +408,7 @@ def hydrate_viaje(viaje, form):
         if match:
             viaje.tarifa = to_decimal(match.tarifa_tn)
         else:
-            viaje.tarifa = to_decimal(tarifa_manual, "0")
+            viaje.tarifa = to_decimal(tarifa_manual, "0"))
     else:
         viaje.tarifa = to_decimal(tarifa_manual, "0")
 
