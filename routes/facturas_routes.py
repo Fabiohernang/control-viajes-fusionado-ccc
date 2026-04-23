@@ -14,6 +14,7 @@ from utils import to_decimal, quantize_money
 
 facturas_bp = Blueprint("facturas", __name__)
 
+@facturas_bp.route("/facturas")
 @login_required
 def facturas():
     q = request.args.get("q", "").strip()
@@ -73,11 +74,12 @@ def importar_factura_pdf():
     if request.method == "POST":
         archivo = request.files.get("archivo_pdf")
         if not archivo or not archivo.filename:
-            flash("Seleccioná un PDF de factura.", "warning")
+            flash("Seleccioná un archivo de factura.", "warning")
             return redirect(url_for("facturas.importar_factura_pdf"))
 
-        if not archivo.filename.lower().endswith(".pdf"):
-            flash("El archivo debe ser PDF.", "warning")
+        nombre = archivo.filename.lower()
+        if not (nombre.endswith(".pdf") or nombre.endswith(".xls") or nombre.endswith(".xlsx")):
+            flash("El archivo debe ser PDF o Excel.", "warning")
             return redirect(url_for("facturas.importar_factura_pdf"))
 
         try:
@@ -108,7 +110,7 @@ def confirmar_importacion_factura_pdf():
         factura = crear_factura_y_viajes_desde_importacion(preview, crear_viajes=crear_viajes)
         session.pop("factura_pdf_preview", None)
         flash("Factura importada correctamente.", "success")
-        return redirect(url_for("detalle_factura", factura_id=factura.id))
+        return redirect(url_for("facturas.detalle_factura", factura_id=factura.id))
     except Exception as exc:
         flash(f"No se pudo importar la factura: {exc}", "warning")
         return redirect(url_for("facturas.importar_factura_pdf"))
@@ -120,6 +122,8 @@ def cancelar_importacion_factura_pdf():
     session.pop("factura_pdf_preview", None)
     flash("Vista previa descartada.", "success")
     return redirect(url_for("facturas.importar_factura_pdf"))
+
+
 @facturas_bp.route("/cobranzas")
 @login_required
 def cobranzas():
@@ -149,7 +153,6 @@ def cobranzas():
         sum((to_decimal(f.saldo_pendiente) for f in facturas_a_vencer_7), Decimal("0"))
     )
 
-    # Clientes con deuda
     clientes_dict = {}
     for f in facturas_abiertas:
         cliente = f.cliente
@@ -168,10 +171,7 @@ def cobranzas():
         if f.vencida:
             clientes_dict[cliente]["total_vencido"] += to_decimal(f.saldo_pendiente)
 
-    # último pago por cliente
-    pagos_por_cliente = (
-        Pago.query.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).all()
-    )
+    pagos_por_cliente = Pago.query.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).all()
     for p in pagos_por_cliente:
         if p.productor in clientes_dict and clientes_dict[p.productor]["ultimo_pago"] is None:
             clientes_dict[p.productor]["ultimo_pago"] = p.fecha_pago.strftime("%d/%m/%Y")
@@ -183,59 +183,13 @@ def cobranzas():
         c["total_adeudado"] = quantize_money(c["total_adeudado"])
         c["total_vencido"] = quantize_money(c["total_vencido"])
 
-    # últimos pagos
     ultimos_pagos = Pago.query.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).limit(10).all()
-
-    # análisis de velocidad de pago
-    analisis_cliente = {}
-    facturas_pagadas = Factura.query.filter(Factura.estado_pago == "pagada").all()
-
-    for f in facturas_pagadas:
-        fechas_reales = [
-            aplicacion.pago.fecha_cobro_real
-            for aplicacion in f.aplicaciones
-            if aplicacion.pago and aplicacion.pago.fecha_cobro_real
-        ]
-
-        fecha_referencia = max(fechas_reales) if fechas_reales else f.ultima_fecha_pago
-
-        if not fecha_referencia:
-            continue
-
-        dias = (fecha_referencia - f.fecha).days
-        if dias < 0:
-            dias = 0
-
-        cliente = f.cliente
-        if cliente not in analisis_cliente:
-            analisis_cliente[cliente] = []
-
-        analisis_cliente[cliente].append(dias)
 
     promedio_dias_cobro = 0
     cliente_mas_rapido = None
     dias_cliente_rapido = 0
     cliente_mas_lento = None
     dias_cliente_lento = 0
-
-    if analisis_cliente:
-        promedios = []
-        todos = []
-
-        for cliente, dias_lista in analisis_cliente.items():
-            promedio = sum(dias_lista) / len(dias_lista)
-            promedios.append((cliente, promedio))
-            todos.extend(dias_lista)
-
-        promedios.sort(key=lambda x: x[1])
-
-        cliente_mas_rapido = promedios[0][0]
-        dias_cliente_rapido = round(promedios[0][1])
-
-        cliente_mas_lento = promedios[-1][0]
-        dias_cliente_lento = round(promedios[-1][1])
-
-        promedio_dias_cobro = round(sum(todos) / len(todos))
 
     return render_template(
         "cobranzas.html",
@@ -254,6 +208,7 @@ def cobranzas():
         facturas_vencidas=sorted(facturas_vencidas, key=lambda x: x.dias_vencida, reverse=True)[:15],
         ultimos_pagos=ultimos_pagos
     )
+
 
 @facturas_bp.route("/facturas/<int:factura_id>")
 @login_required
@@ -280,7 +235,7 @@ def eliminar_factura(factura_id):
     factura = Factura.query.get_or_404(factura_id)
     if factura.aplicaciones:
         flash("No se puede eliminar una factura con pagos aplicados.", "warning")
-        return redirect(url_for("detalle_factura", factura_id=factura_id))
+        return redirect(url_for("facturas.detalle_factura", factura_id=factura_id))
     db.session.delete(factura)
     db.session.commit()
     flash("Factura eliminada.", "success")
@@ -304,4 +259,4 @@ def editar_percepciones(factura_id):
     db.session.commit()
 
     flash("Percepciones actualizadas.", "success")
-    return redirect(url_for("detalle_factura", factura_id=factura.id))
+    return redirect(url_for("facturas.detalle_factura", factura_id=factura.id))
