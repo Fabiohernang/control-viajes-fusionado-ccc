@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, g
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -16,6 +16,8 @@ from utils import to_decimal, quantize_money
 
 liquidaciones_bp = Blueprint("liquidaciones", __name__)
 
+
+@liquidaciones_bp.route("/liquidaciones")
 @login_required
 def liquidaciones():
     q = request.args.get("q", "").strip()
@@ -113,14 +115,14 @@ def buscar_pagos_fleteros():
         try:
             fecha_desde = datetime.strptime(fecha_desde_raw, "%Y-%m-%d").date()
             query = query.filter(LiquidacionPago.fecha >= fecha_desde)
-        except:
+        except Exception:
             flash("Fecha desde inválida", "warning")
 
     if fecha_hasta_raw:
         try:
             fecha_hasta = datetime.strptime(fecha_hasta_raw, "%Y-%m-%d").date()
             query = query.filter(LiquidacionPago.fecha <= fecha_hasta)
-        except:
+        except Exception:
             flash("Fecha hasta inválida", "warning")
 
     if medio:
@@ -196,6 +198,7 @@ def nueva_liquidacion():
 
     return render_template("liquidacion_form.html", fleteros=fleteros)
 
+
 @liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/editar", methods=["GET", "POST"])
 @login_required
 def editar_liquidacion(liquidacion_id):
@@ -236,7 +239,7 @@ def editar_liquidacion(liquidacion_id):
         db.session.commit()
 
         flash("Liquidación actualizada.", "success")
-        return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
 
     viajes = Viaje.query.order_by(Viaje.fecha.desc(), Viaje.id.desc()).all()
     return render_template("liquidacion_form.html", fleteros=fleteros, viajes=viajes, liquidacion=liquidacion)
@@ -276,7 +279,7 @@ def pagar_liquidacion(liquidacion_id):
 
         if not medio or importe <= 0:
             flash("Completá medio e importe del pago.", "warning")
-            return redirect(url_for("pagar_liquidacion", liquidacion_id=liquidacion.id))
+            return redirect(url_for("liquidaciones.pagar_liquidacion", liquidacion_id=liquidacion.id))
 
         pago = LiquidacionPago(
             liquidacion_id=liquidacion.id,
@@ -293,14 +296,14 @@ def pagar_liquidacion(liquidacion_id):
         db.session.commit()
 
         flash("Pago registrado.", "success")
-        return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
 
     return render_template(
         "liquidacion_pago_form.html",
         liquidacion=liquidacion,
         fecha_hoy=date.today().strftime("%Y-%m-%d"),
         pago=None,
-        accion_url=url_for("pagar_liquidacion", liquidacion_id=liquidacion.id),
+        accion_url=url_for("liquidaciones.pagar_liquidacion", liquidacion_id=liquidacion.id),
         titulo="Registrar pago de liquidación",
         boton="Guardar pago"
     )
@@ -314,7 +317,7 @@ def editar_pago_liquidacion(liquidacion_id, pago_id):
 
     if pago.liquidacion_id != liquidacion.id:
         flash("El pago no corresponde a esta liquidación.", "warning")
-        return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
 
     if request.method == "POST":
         fecha_raw = request.form.get("fecha", "")
@@ -326,20 +329,20 @@ def editar_pago_liquidacion(liquidacion_id, pago_id):
 
         if not pago.medio or to_decimal(pago.importe) <= 0:
             flash("Completá medio e importe del pago.", "warning")
-            return redirect(url_for("editar_pago_liquidacion", liquidacion_id=liquidacion.id, pago_id=pago.id))
+            return redirect(url_for("liquidaciones.editar_pago_liquidacion", liquidacion_id=liquidacion.id, pago_id=pago.id))
 
         recalcular_liquidacion(liquidacion)
         db.session.commit()
 
         flash("Pago actualizado.", "success")
-        return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
 
     return render_template(
         "liquidacion_pago_form.html",
         liquidacion=liquidacion,
         fecha_hoy=pago.fecha.strftime("%Y-%m-%d"),
         pago=pago,
-        accion_url=url_for("editar_pago_liquidacion", liquidacion_id=liquidacion.id, pago_id=pago.id),
+        accion_url=url_for("liquidaciones.editar_pago_liquidacion", liquidacion_id=liquidacion.id, pago_id=pago.id),
         titulo="Editar pago de liquidación",
         boton="Guardar cambios"
     )
@@ -353,7 +356,7 @@ def eliminar_pago_liquidacion(liquidacion_id, pago_id):
 
     if pago.liquidacion_id != liquidacion.id:
         flash("El pago no corresponde a esta liquidación.", "warning")
-        return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
 
     db.session.delete(pago)
     db.session.flush()
@@ -362,7 +365,7 @@ def eliminar_pago_liquidacion(liquidacion_id, pago_id):
     db.session.commit()
 
     flash("Pago eliminado correctamente.", "success")
-    return redirect(url_for("detalle_liquidacion", liquidacion_id=liquidacion.id))
+    return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
 
 
 @liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/recibo")
@@ -407,7 +410,6 @@ def hydrate_viaje(viaje, form):
     viaje.kg = to_decimal(form.get("kg", "0"))
     viaje.liquidado = form.get("liquidado") == "si"
     viaje.observaciones = form.get("observaciones", "").strip() or None
-
 
 
 # =========================
