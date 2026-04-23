@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Importar factura PDF{% endblock %}
+
+{% block content %}
+
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Importar factura PDF</div>
+    <div class="module-subtitle">Leé una factura emitida por la cooperativa y creá la factura con sus viajes automáticamente</div>
+  </div>
+  <div class="module-header-actions">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('facturas.facturas') }}">
+      <i class="bi bi-arrow-left me-1"></i> Facturas
+    </a>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Subir archivo</div>
+  <div class="admin-panel-body">
+    <form method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
+      <div class="col-md-8">
+        <label class="form-label">PDF de factura</label>
+        <input class="form-control" type="file" name="archivo_pdf" accept="application/pdf" required>
+      </div>
+      <div class="col-md-4">
+        <button class="btn btn-primary w-100" type="submit">
+          <i class="bi bi-file-earmark-arrow-up me-1"></i> Leer factura
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if preview %}
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Factura</div>
+        <div class="kpi-money">{{ preview.numero_factura }}</div>
+        <div class="kpi-sub">Número detectado</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Cliente</div>
+        <div class="kpi-money" style="font-size:1rem">{{ preview.cliente }}</div>
+        <div class="kpi-sub">CUIT {{ preview.cuit_cliente or '-' }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-dark">
+      <div class="card-body">
+        <div class="kpi-label">Total</div>
+        <div class="kpi-money">{{ preview.total|ars }}</div>
+        <div class="kpi-sub">{{ preview.cantidad_items }} viaje{{ '' if preview.cantidad_items == 1 else 's' }} detectado{{ '' if preview.cantidad_items == 1 else 's' }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-yellow">
+      <div class="card-body">
+        <div class="kpi-label">Vencimiento</div>
+        <div class="kpi-money">{{ preview.fecha_vencimiento }}</div>
+        <div class="kpi-sub">Pago {{ preview.condicion_pago or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Cabecera detectada</div>
+  <div class="admin-panel-body">
+    <div class="row g-3">
+      <div class="col-md-3"><strong>Fecha:</strong><br>{{ preview.fecha }}</div>
+      <div class="col-md-3"><strong>Cliente N°:</strong><br>{{ preview.cliente_numero or '-' }}</div>
+      <div class="col-md-2"><strong>Subtotal:</strong><br>{{ preview.subtotal|ars }}</div>
+      <div class="col-md-2"><strong>IVA:</strong><br>{{ preview.iva|ars }}</div>
+      <div class="col-md-2"><strong>Percepciones:</strong><br>{{ preview.percepciones|ars }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title d-flex justify-content-between align-items-center">
+    <span>Viajes detectados</span>
+    <span class="panel-counter">{{ preview["items"]|length }} resultado{{ '' if preview["items"]|length == 1 else 's' }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fletero</th>
+          <th>Origen</th>
+          <th>Destino</th>
+          <th class="text-end">Km</th>
+          <th class="text-end">Kg</th>
+          <th>Producto</th>
+          <th>CTG</th>
+          <th class="text-end">Tarifa</th>
+          <th class="text-end">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in preview["items"] %}
+        <tr>
+          <td><strong>{{ item.fletero }}</strong></td>
+          <td>{{ item.origen }}</td>
+          <td>{{ item.destino }}</td>
+          <td class="text-end amount-cell">{{ item.kilometros }}</td>
+          <td class="text-end amount-cell">{{ item.kg_bruto }}</td>
+          <td>{{ item.producto }}</td>
+          <td>{{ item.ctg }}</td>
+          <td class="text-end amount-cell">{{ item.tarifa }}</td>
+          <td class="text-end amount-cell amount-strong">{{ item.importe_total|ars }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2">
+  <form method="post" action="{{ url_for('facturas.confirmar_importacion_factura_pdf') }}">
+    <input type="hidden" name="accion" value="factura_y_viajes">
+    <button class="btn btn-primary" type="submit">
+      <i class="bi bi-check-circle me-1"></i> Crear factura + viajes
+    </button>
+  </form>
+
+  <form method="post" action="{{ url_for('facturas.confirmar_importacion_factura_pdf') }}">
+    <input type="hidden" name="accion" value="solo_factura">
+    <button class="btn btn-outline-primary" type="submit">
+      <i class="bi bi-receipt me-1"></i> Crear solo factura
+    </button>
+  </form>
+
+  <form method="post" action="{{ url_for('facturas.cancelar_importacion_factura_pdf') }}">
+    <button class="btn btn-outline-secondary" type="submit">
+      Descartar vista previa
+    </button>
+  </form>
+</div>
+{% endif %}
+
+{% endblock %}

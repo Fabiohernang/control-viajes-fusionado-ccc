@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Importar liquidación</h2>
+
+<form method="post" enctype="multipart/form-data">
+  <input type="file" name="archivo" accept="application/pdf" required>
+  <button type="submit">Subir</button>
+</form>
+
+{% endblock %}

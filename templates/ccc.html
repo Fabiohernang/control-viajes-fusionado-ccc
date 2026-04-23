@@ -1,0 +1,919 @@
+{% extends "base.html" %}
+{% block title %}EESS — Cuentas Corrientes{% endblock %}
+
+{% block content %}
+
+<!-- Modal: Acción manual -->
+<div id="modal-accion" style="position:fixed;inset:0;background:rgba(15,26,38,.55);backdrop-filter:blur(2px);z-index:1060;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:440px;max-width:95vw;box-shadow:var(--shadow-md)">
+    <h5 class="fw-semibold mb-3" id="mac-title">Registrar acción</h5>
+    <input type="hidden" id="mac-codigo">
+    <input type="hidden" id="mac-tipo">
+    <div class="mb-3">
+      <label class="form-label small text-muted fw-semibold text-uppercase">Fecha</label>
+      <input type="date" id="mac-fecha" class="form-control">
+    </div>
+    <div class="mb-3" id="mac-monto-wrap">
+      <label class="form-label small text-muted fw-semibold text-uppercase">Importe ($)</label>
+      <input type="number" id="mac-monto" class="form-control" placeholder="0.00" step="0.01">
+    </div>
+    <div class="mb-3">
+      <label class="form-label small text-muted fw-semibold text-uppercase">Concepto / Observación</label>
+      <textarea id="mac-concepto" class="form-control" rows="3" placeholder="Detalle..."></textarea>
+    </div>
+    <div class="d-flex gap-2 justify-content-end">
+      <button class="btn btn-outline-secondary btn-sm" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="confirmarAccion()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header interno -->
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+  <div>
+    <h1 class="h4 fw-bold mb-1" style="color:var(--brand-900)">
+      <i class="bi bi-journal-text me-2" style="color:var(--brand-500)"></i>Cuentas Corrientes — EESS
+    </h1>
+    <p class="text-muted small mb-0" id="last-load">Sin datos cargados</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    <div class="d-flex align-items-center gap-2 p-2 rounded border bg-white" style="font-size:13px">
+      <span class="text-muted">📅 Fecha ref.:</span>
+      <input type="date" id="fecha-ref" class="form-control form-control-sm" style="width:150px" onchange="recalcAll()">
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" id="btn-export" style="display:none" onclick="exportarResumen()">
+      <i class="bi bi-download me-1"></i>Exportar
+    </button>
+    <label class="btn btn-outline-primary btn-sm mb-0" id="btn-add-pdf" style="display:none;cursor:pointer">
+      <i class="bi bi-plus-circle me-1"></i>Agregar PDF
+      <input type="file" accept=".pdf" multiple class="d-none" onchange="handleFiles(this.files)">
+    </label>
+  </div>
+</div>
+
+<!-- Upload box -->
+<div id="upload-box" class="border border-2 border-dashed rounded-3 p-5 text-center mb-4 position-relative"
+     style="background:#f8fbff;border-color:#c2d6ee!important;cursor:pointer"
+     ondragover="event.preventDefault();this.classList.add('border-primary')"
+     ondragleave="this.classList.remove('border-primary')"
+     ondrop="handleDrop(event)">
+  <input type="file" accept=".pdf" multiple class="position-absolute top-0 start-0 w-100 h-100 opacity-0" style="cursor:pointer" onchange="handleFiles(this.files)">
+  <div style="font-size:36px;margin-bottom:10px">📄</div>
+  <div class="fw-semibold fs-5 mb-1">Subí el PDF del sector</div>
+  <div class="text-muted small mb-3">Arrastrá o hacé clic · Podés subir múltiples PDFs · Los datos se guardan en la base de datos</div>
+  <!-- Sector selector -->
+  <div class="d-flex justify-content-center gap-2 flex-wrap mb-3" onclick="event.stopPropagation()">
+    <button class="btn btn-sm btn-outline-primary sector-btn active" onclick="setSector('clientes',this)">🏢 Clientes</button>
+    <button class="btn btn-sm btn-outline-secondary sector-btn" onclick="setSector('orden_externos',this)">⛽ Orden externos</button>
+    <button class="btn btn-sm btn-outline-secondary sector-btn" onclick="setSector('orden_socios',this)">🚛 Orden socios</button>
+    <button class="btn btn-sm btn-outline-secondary sector-btn" onclick="setSector('socios_particulares',this)">👤 Socios particulares</button>
+    <button class="btn btn-sm btn-outline-secondary sector-btn" onclick="setSector('telefonos',this)">📞 Teléfonos</button>
+  </div>
+  <div id="prog-wrap" style="display:none;max-width:400px;margin:0 auto">
+    <div class="small text-muted mb-1" id="prog-text">Procesando...</div>
+    <div class="progress" style="height:4px">
+      <div class="progress-bar" id="prog-fill" style="width:0%;transition:width .3s"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs de sector -->
+<div class="d-flex gap-2 flex-wrap mb-3" id="tipo-tabs" style="display:none!important">
+  <button class="btn btn-sm btn-outline-primary sector-filter active" onclick="filtrarTipo('todos',this)">Todos</button>
+  <button class="btn btn-sm btn-outline-secondary sector-filter" onclick="filtrarTipo('clientes',this)">🏢 Clientes</button>
+  <button class="btn btn-sm btn-outline-secondary sector-filter" onclick="filtrarTipo('orden_externos',this)">⛽ Orden externos</button>
+  <button class="btn btn-sm btn-outline-secondary sector-filter" onclick="filtrarTipo('orden_socios',this)">🚛 Orden socios</button>
+  <button class="btn btn-sm btn-outline-secondary sector-filter" onclick="filtrarTipo('socios_particulares',this)">👤 Socios particulares</button>
+  <button class="btn btn-sm btn-outline-secondary sector-filter" onclick="filtrarTipo('telefonos',this)">📞 Teléfonos</button>
+  <button class="btn btn-sm btn-outline-danger ms-auto" onclick="eliminarSectorActual()">🗑️ Eliminar sector actual</button>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-3" id="stats-bar" style="display:none!important">
+  <div class="col">
+    <div class="card border-0 shadow-sm h-100" style="border-left:3px solid var(--danger)!important">
+      <div class="card-body py-3">
+        <div class="fw-bold fs-4 text-danger" id="st-susp">0</div>
+        <div class="small text-muted">🔴 Suspender</div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card border-0 shadow-sm h-100" style="border-left:3px solid var(--warning)!important">
+      <div class="card-body py-3">
+        <div class="fw-bold fs-4 text-warning" id="st-avis">0</div>
+        <div class="small text-muted">🟡 Avisar hoy</div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card border-0 shadow-sm h-100" style="border-left:3px solid #f97316!important">
+      <div class="card-body py-3">
+        <div class="fw-bold fs-4" style="color:#f97316" id="st-mora">0</div>
+        <div class="small text-muted">🟠 Con mora</div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card border-0 shadow-sm h-100" style="border-left:3px solid var(--success)!important">
+      <div class="card-body py-3">
+        <div class="fw-bold fs-4 text-success" id="st-ok">0</div>
+        <div class="small text-muted">🟢 Al día</div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card border-0 shadow-sm h-100" style="border-left:3px solid var(--info)!important">
+      <div class="card-body py-3">
+        <div class="fw-bold fs-4 text-primary" id="st-favor">$0</div>
+        <div class="small text-muted">💙 Saldo a favor</div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card border-0 shadow-sm h-100" style="border-left:3px solid var(--danger)!important">
+      <div class="card-body py-3">
+        <div class="fw-bold fs-4 text-danger" id="st-ajuste">$0</div>
+        <div class="small text-muted">📊 Total mora</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros de estado -->
+<div class="d-flex gap-2 flex-wrap align-items-center mb-3" id="filters-bar" style="display:none!important">
+  <button class="btn btn-sm btn-secondary estado-btn active" onclick="filtEst('todos',this)">Todos</button>
+  <button class="btn btn-sm btn-outline-danger estado-btn" onclick="filtEst('suspender',this)">Suspender</button>
+  <button class="btn btn-sm btn-outline-warning estado-btn" onclick="filtEst('aviso',this)">Avisar</button>
+  <button class="btn btn-sm btn-outline-secondary estado-btn" onclick="filtEst('con-mora',this)">Con mora</button>
+  <button class="btn btn-sm btn-outline-success estado-btn" onclick="filtEst('al-dia',this)">Al día</button>
+  <button class="btn btn-sm btn-outline-primary estado-btn" onclick="filtEst('saldada',this)">Saldadas</button>
+  <input class="form-control form-control-sm ms-auto" style="max-width:220px" placeholder="🔍 Buscar cliente..." oninput="filtBusq(this.value)">
+</div>
+
+<!-- Mensaje de resumen configurable -->
+<div id="mensaje-box" class="card border-0 shadow-sm mb-3" style="display:none">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="fw-semibold small">✉️ Mensaje de resumen semanal</span>
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" id="msg-vencimiento" class="form-control form-control-sm" style="width:160px" placeholder="Fecha vencimiento" oninput="cargarMensajeResumen()">
+        <button class="btn btn-outline-secondary btn-sm" onclick="copiarMensajeResumen()">📋 Copiar</button>
+        <button class="btn btn-outline-primary btn-sm" onclick="guardarMensajeResumen()">💾 Guardar</button>
+      </div>
+    </div>
+    <div class="row g-2">
+      <div class="col-md-6">
+        <textarea id="msg-template" class="form-control form-control-sm" rows="5" placeholder="Plantilla del mensaje..."></textarea>
+      </div>
+      <div class="col-md-6">
+        <div id="msg-preview" class="border rounded p-2 bg-light small" style="min-height:100px;white-space:pre-wrap;font-family:monospace"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Contenido principal -->
+<div id="content">
+  <div class="text-center py-5 text-muted">
+    <div style="font-size:40px;margin-bottom:12px">📊</div>
+    <div class="fs-5">Subí el PDF para ver las cuentas</div>
+    <div class="small mt-1">Los datos se guardan en la base de datos — la próxima vez se cargan automáticamente</div>
+  </div>
+</div>
+
+<style>
+/* CCC-specific styles usando el sistema del base */
+.ccc-card { background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; margin-bottom:6px; transition:border-color .15s; }
+.ccc-card:hover { border-color:var(--border-strong); }
+.ccc-card-hdr { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; user-select:none; }
+.ccc-status { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.ccc-status.s-susp { background:var(--danger); box-shadow:0 0 5px var(--danger); }
+.ccc-status.s-aviso { background:var(--warning); box-shadow:0 0 5px #f59e0b; }
+.ccc-status.s-mora { background:#f97316; }
+.ccc-status.s-ok { background:var(--success); }
+.ccc-status.s-favor { background:var(--info); }
+.ccc-status.s-saldada { background:var(--info); opacity:.5; }
+.ccc-nom { font-weight:600; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ccc-cod { font-family:monospace; font-size:10px; color:var(--text-muted); flex-shrink:0; }
+.ccc-saldo { font-family:monospace; font-size:13px; font-weight:700; flex-shrink:0; }
+.ccc-saldo.debe { color:var(--danger); }
+.ccc-saldo.favor { color:var(--success); }
+.ccc-saldo.cero { color:var(--text-soft); }
+.ccc-detail { display:none; border-top:1px solid var(--border); padding:14px; }
+.ccc-card.open .ccc-detail { display:block; }
+.ccc-arrow { color:var(--text-soft); font-size:11px; transition:transform .15s; }
+.ccc-card.open .ccc-arrow { transform:rotate(90deg); }
+.vblock { border-radius:6px; padding:9px 12px; border:1px solid var(--border); margin-bottom:6px; background:var(--surface-2); }
+.vblock.v-susp { border-color:#fca5a5; background:#fff1f1; }
+.vblock.v-aviso { border-color:#fcd34d; background:#fffbeb; }
+.vblock.v-mora { border-color:#fed7aa; background:#fff7ed; }
+.ccc-tbl { width:100%; border-collapse:collapse; font-size:11px; }
+.ccc-tbl th { text-align:left; padding:5px 8px; color:var(--text-muted); font-size:10px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+.ccc-tbl td { padding:6px 8px; border-bottom:1px solid var(--border); }
+.ccc-tbl tr:last-child td { border-bottom:none; }
+.ccc-tbl tr:hover td { background:var(--surface-2); }
+.ttype { font-family:monospace; font-size:10px; padding:1px 5px; border-radius:3px; }
+.t-fac { background:var(--info-soft); color:var(--info); }
+.t-rec { background:var(--success-soft); color:var(--success); }
+.t-nda { background:var(--danger-soft); color:var(--danger); }
+.t-ndc { background:var(--success-soft); color:var(--success); }
+.t-ant { background:var(--warning-soft); color:var(--warning); }
+.t-man { background:var(--accent-soft); color:#92400e; }
+.ibox { border-radius:var(--radius-sm); padding:12px; border:1px solid var(--border); background:var(--surface-2); margin-top:10px; }
+.ibox.mora { border-color:#fca5a5; background:#fff1f1; }
+.sector-btn.active, .sector-filter.active, .estado-btn.active { background:var(--brand-600)!important; border-color:var(--brand-600)!important; color:#fff!important; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── Estado ─────────────────────────────────────────────────────
+var CUENTAS = [];
+var HOY = new Date();
+var FEST = 'todos';
+var FTIPO = 'todos';
+var FBUSQ = '';
+var SECTOR_CARGA = 'clientes';
+
+// ── Init ──────────────────────────────────────────────────────
+(async function() {
+  var hoy = new Date();
+  document.getElementById('fecha-ref').value = hoy.toISOString().split('T')[0];
+  // Ensure clean initial state before loading
+  document.getElementById('upload-box').style.display = '';
+  await cargarDesdeBD();
+  await cargarMensajeResumen();
+})();
+
+async function cargarDesdeBD() {
+  try {
+    var res = await fetch('/api/ccc/cuentas');
+    if (!res.ok) return;
+    var cuentas = await res.json();
+    // SIEMPRE reemplazar CUENTAS (incluso si es vacío después de un delete)
+    CUENTAS = cuentas.map(mapCuenta);
+    if (!CUENTAS.length) {
+      // No hay datos: mostrar upload box, ocultar UI
+      resetUI();
+      return;
+    }
+    recalcAll();
+    mostrarUI();
+    render();
+    var stats = await fetch('/api/ccc/stats').then(function(r){return r.json();});
+    if (stats.ultimo_periodo) {
+      document.getElementById('last-load').textContent =
+        '📅 Última carga: ' + stats.ultimo_periodo.fecha_carga + ' — ' + stats.ultimo_periodo.archivo;
+    }
+  } catch(e) { console.error(e); }
+}
+
+function mapCuenta(c) {
+  c.saldo = parseFloat(c.saldo || 0);
+  c.movimientos = (c.movimientos || []).map(function(m){
+    m.debe = parseFloat(m.debe || 0);
+    m.haber = parseFloat(m.haber || 0);
+    m.saldo = parseFloat(m.saldo || 0);
+    return m;
+  });
+  c.acciones = c.acciones || [];
+  calcCuenta(c);
+  return c;
+}
+
+// ── Fecha utils ───────────────────────────────────────────────
+function parseDate(s) {
+  if (!s) return null;
+  s = s.trim();
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1]);
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  return null;
+}
+function diffDays(d1, d2) { return Math.floor((d2 - d1) / 864e5); }
+function fmtDate(d) { return d.toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'}); }
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function calcVencimiento(fechaStr) {
+  var d = parseDate(fechaStr);
+  if (!d) return null;
+  var dia = d.getDate();
+  var vto = new Date(d);
+  if (dia <= 7) vto.setDate(9);
+  else if (dia <= 15) vto.setDate(17);
+  else if (dia <= 22) vto.setDate(24);
+  else { vto = new Date(d.getFullYear(), d.getMonth() + 1, 2); }
+  return vto;
+}
+
+// ── Cálculo de mora — FÓRMULA EXACTA DEL EXCEL ───────────────
+// =POTENCIA(((7%/30)+1);dias)-1
+function calcCoef(dias) {
+  if (dias <= 0) return 0;
+  return Math.pow((0.07 / 30) + 1, dias) - 1;
+}
+
+function calcMora(monto, dias) {
+  if (!monto || !dias || dias <= 0) return null;
+  var coef = calcCoef(dias);
+  var interes = monto * coef;
+  var iva = interes * 0.21;
+  return { coef: coef, interes: interes, iva: iva, total: interes + iva };
+}
+
+// ── Reglas por tipo (espeja Python) ──────────────────────────
+function reglasTipo(tipo) {
+  if (tipo === 'clientes') return { mora: true, suspension: true, aviso: true };
+  // orden_externos, orden_socios, socios_particulares, telefonos: solo aviso
+  return { mora: false, suspension: false, aviso: true };
+}
+
+// ── Estado de un bloque ───────────────────────────────────────
+function estadoBloque(tipo, dias) {
+  var reg = reglasTipo(tipo);
+  if (dias < 0) return 'al-dia';
+  if (dias === 0) return 'vence-hoy';
+  if (dias >= 4 && reg.suspension) return 'suspender';
+  if (dias >= 3 && reg.aviso) return 'aviso'; // día 3: avisar, día 4+: suspender
+  if (dias > 0 && reg.mora) return 'con-mora';
+  if (dias > 0) return 'pendiente';
+  return 'al-dia';
+}
+
+// ── Calcular cuenta ───────────────────────────────────────────
+function calcCuenta(c) {
+  if (c.estado_manual === 'saldada') {
+    c.estado = 'saldada'; c.bloques = []; c.totalAjuste = 0; return;
+  }
+
+  // Saldo negativo = a favor
+  if (c.saldo < -0.01) {
+    c.estado = 'a-favor'; c.bloques = []; c.totalAjuste = 0; return;
+  }
+
+  var blocksMap = {};
+  var pagosTotal = 0;
+
+  (c.movimientos || []).forEach(function(m) {
+    var tipo = (m.tipo || '').toUpperCase();
+    if (m.haber > 0) { pagosTotal += m.haber; return; }
+    if (m.debe <= 0 || tipo === 'NDA') return;
+    if (!['FAA','FAB','FAC','FAD'].includes(tipo)) return;
+
+    var fechaVto = m.fecha_vto || m.fechaVto || '';
+    var vtoDate;
+    if (fechaVto) {
+      vtoDate = parseDate(fechaVto);
+    } else {
+      vtoDate = calcVencimiento(m.fecha);
+    }
+    if (!vtoDate) return;
+
+    var key = vtoDate.toISOString().split('T')[0];
+    if (!blocksMap[key]) blocksMap[key] = { fechaVto: fmtDate(vtoDate), vtoDate: vtoDate, monto: 0, facturas: [] };
+    blocksMap[key].monto += m.debe;
+    blocksMap[key].facturas.push(m);
+  });
+
+  var bloques = Object.values(blocksMap).sort(function(a,b){ return a.vtoDate - b.vtoDate; });
+
+  // FIFO: aplicar pagos al bloque más viejo primero
+  var restoPago = pagosTotal;
+  bloques.forEach(function(b) {
+    var aplicado = Math.min(b.monto, restoPago);
+    restoPago -= aplicado;
+    b.pendiente = b.monto - aplicado;
+    var dias = Math.max(diffDays(b.vtoDate, HOY), 0);
+    b.dias = dias;
+    b.estado = b.pendiente > 0.01 ? estadoBloque(c.tipo, dias) : 'saldado';
+    if (b.pendiente > 0.01 && reglasTipo(c.tipo).mora && dias > 0) {
+      b.interes = calcMora(b.pendiente, dias);
+    } else {
+      b.interes = null;
+    }
+  });
+
+  c.bloques = bloques.filter(function(b){ return b.pendiente > 0.01; });
+  c.totalAjuste = c.bloques.reduce(function(s,b){ return s + (b.interes ? b.interes.total : 0); }, 0);
+
+  var estados = c.bloques.map(function(b){ return b.estado; });
+  if (estados.includes('suspender')) c.estado = 'suspender';
+  else if (estados.includes('aviso')) c.estado = 'aviso';
+  else if (estados.includes('con-mora')) c.estado = 'con-mora';
+  else if (estados.includes('vence-hoy') || estados.includes('pendiente')) c.estado = 'pendiente';
+  else c.estado = 'al-dia';
+
+  if (!c.bloques.length && c.saldo <= 0.01) c.estado = 'al-dia';
+}
+
+function recalcAll() {
+  var val = document.getElementById('fecha-ref').value;
+  if (val) HOY = parseDate(val) || new Date();
+  CUENTAS.forEach(calcCuenta);
+  render();
+}
+
+// ── Render ────────────────────────────────────────────────────
+function render() {
+  updateStats();
+  var list = getFiltered();
+  var el = document.getElementById('content');
+  if (!CUENTAS.length) {
+    el.innerHTML = '<div class="text-center py-5 text-muted"><div style="font-size:40px">📊</div><div class="mt-2">Subí el PDF para ver las cuentas</div></div>';
+    return;
+  }
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center py-5 text-muted"><div style="font-size:40px">🔍</div><div class="mt-2">Sin resultados para este filtro</div></div>';
+    return;
+  }
+  el.innerHTML = list.map(renderCard).join('');
+}
+
+function renderCard(c) {
+  var statusClass = {
+    suspender: 's-susp', aviso: 's-aviso', 'con-mora': 's-mora',
+    'vence-hoy': 's-mora', pendiente: 's-ok', 'al-dia': 's-ok',
+    saldada: 's-saldada', 'a-favor': 's-favor'
+  }[c.estado] || 's-ok';
+
+  var saldoClass = c.saldo > 0.01 ? 'debe' : c.saldo < -0.01 ? 'favor' : 'cero';
+
+  var badges = '';
+  if (c.estado_manual === 'saldada') badges += '<span class="badge bg-primary me-1">✅ SALDADA</span>';
+  else if (c.estado === 'a-favor') badges += '<span class="badge bg-success me-1">SALDO A FAVOR</span>';
+  else if (c.estado === 'suspender') badges += '<span class="badge bg-danger me-1">SUSPENDER</span>';
+  else if (c.estado === 'aviso') badges += '<span class="badge bg-warning text-dark me-1">AVISAR HOY</span>';
+  else if (c.estado === 'con-mora') badges += '<span class="badge bg-warning text-dark me-1">CON MORA</span>';
+  if (c.totalAjuste > 0) badges += '<span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1">Mora $' + fmtN(c.totalAjuste) + '</span>';
+  if (c.acciones && c.acciones.length) badges += '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">' + c.acciones.length + ' acción' + (c.acciones.length > 1 ? 'es' : '') + '</span>';
+
+  var ticon = {clientes:'🏢',orden_externos:'⛽',orden_socios:'🚛',socios_particulares:'👤',telefonos:'📞'}[c.tipo] || '';
+
+  return '<div class="ccc-card" id="card-' + c.codigo + '">' +
+    '<div class="ccc-card-hdr" onclick="toggle(\'' + c.codigo + '\')">' +
+      '<div class="ccc-status ' + statusClass + '"></div>' +
+      '<div class="ccc-nom">' + ticon + ' ' + esc(c.nombre) + (c.localidad ? ' <span class="text-muted fw-normal">· ' + esc(c.localidad) + '</span>' : '') + '</div>' +
+      '<div class="ccc-cod me-2">' + esc(c.codigo) + '</div>' +
+      '<div class="me-3">' + badges + '</div>' +
+      '<div class="ccc-saldo ' + saldoClass + '">$' + fmtN(c.saldo) + '</div>' +
+      '<i class="bi bi-chevron-right ccc-arrow ms-2"></i>' +
+    '</div>' +
+    '<div class="ccc-detail" id="det-' + c.codigo + '">' + renderDetail(c) + '</div>' +
+  '</div>';
+}
+
+function renderDetail(c) {
+  var reg = reglasTipo(c.tipo);
+
+  // Movimientos
+  var movHTML = '<div class="table-responsive"><table class="ccc-tbl"><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Vto</th><th class="text-end">Debe</th><th class="text-end">Haber</th><th class="text-end">Saldo</th></tr></thead><tbody>';
+  var movs = c.movimientos || [];
+  if (!movs.length) movHTML += '<tr><td colspan="7" class="text-center text-muted py-3">Sin movimientos</td></tr>';
+  movs.forEach(function(m) {
+    var tc = {FAA:'t-fac',FAB:'t-fac',FAC:'t-fac',FAD:'t-fac',REC:'t-rec',NDC:'t-ndc',NDA:'t-nda',ANT:'t-ant'}[m.tipo] || '';
+    if (m.comprobante === 'NDA-MANUAL') tc = 't-man';
+    var fv = m.fecha_vto || m.fechaVto || '';
+    var vtoHTML = '';
+    if (fv) {
+      var vtoD = parseDate(fv);
+      if (vtoD) {
+        var dias = diffDays(vtoD, HOY);
+        var vtoStyle = dias < 0 ? 'color:var(--text-soft)' : dias === 0 ? 'color:#f97316;font-weight:600' : 'color:var(--danger);font-weight:600';
+        vtoHTML = '<span style="font-family:monospace;font-size:10px;' + vtoStyle + '">' + fv + (dias === 0 ? ' (HOY)' : dias > 0 ? ' +' + dias + 'd' : '') + '</span>';
+      }
+    }
+    movHTML += '<tr>' +
+      '<td style="white-space:nowrap;font-family:monospace;font-size:10px;color:var(--text-muted)">' + esc(m.fecha) + '</td>' +
+      '<td><span class="ttype ' + tc + '">' + esc(m.tipo) + '</span></td>' +
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:11px">' + esc(m.descripcion || '—') + '</td>' +
+      '<td>' + vtoHTML + '</td>' +
+      '<td class="text-end" style="font-family:monospace;color:' + (m.debe > 0 ? 'var(--danger)' : 'var(--text-soft)') + '">' + (m.debe > 0 ? '$' + fmtN(m.debe) : '—') + '</td>' +
+      '<td class="text-end" style="font-family:monospace;color:' + (m.haber > 0 ? 'var(--success)' : 'var(--text-soft)') + '">' + (m.haber > 0 ? '$' + fmtN(m.haber) : '—') + '</td>' +
+      '<td class="text-end fw-semibold" style="font-family:monospace;color:' + (m.saldo > 0.01 ? 'var(--danger)' : m.saldo < -0.01 ? 'var(--success)' : 'var(--text-muted)') + '">$' + fmtN(m.saldo) + '</td>' +
+    '</tr>';
+  });
+  movHTML += '</tbody></table></div>';
+
+  // Panel derecho
+  var right = '';
+
+  if (c.estado_manual === 'saldada') {
+    right += '<div class="alert alert-primary py-2 px-3 mb-3 small">✅ <strong>Marcada como saldada manualmente</strong>' +
+      (c.obs_manual ? '<div class="text-muted mt-1">' + esc(c.obs_manual) + '</div>' : '') +
+      '<button class="btn btn-link btn-sm p-0 ms-2" onclick="desmarcarSaldada(\'' + c.codigo + '\')">↩ Desmarcar</button></div>';
+  }
+
+  if (c.estado === 'a-favor') {
+    right += '<div class="alert alert-success py-2 px-3 small">✅ Saldo a favor: <strong>$' + fmtN(Math.abs(c.saldo)) + '</strong>. No corresponde mora ni aviso.</div>';
+  } else {
+    // Bloques de vencimiento
+    right += '<div class="small text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.5px">Vencimientos pendientes</div>';
+    if (!c.bloques || !c.bloques.length) {
+      right += '<div class="text-muted small py-2">✅ Sin facturas pendientes</div>';
+    } else {
+      c.bloques.forEach(function(b) {
+        var cls = {suspender:'v-susp',aviso:'v-aviso','con-mora':'v-mora'}[b.estado] || '';
+        right += '<div class="vblock ' + cls + '">' +
+          '<div class="d-flex justify-content-between align-items-center mb-1">' +
+            '<div class="small">' +
+              '<span class="text-muted" style="font-family:monospace;font-size:10px">Vto: ' + esc(b.fechaVto) + '</span>' +
+              (b.dias === 0 ? ' <span class="badge bg-warning text-dark">HOY</span>' :
+               b.dias === 3 ? ' <span class="badge bg-warning text-dark">AVISAR</span>' :
+               b.dias >= 4 ? ' <span class="badge bg-danger">' + b.dias + ' días</span>' :
+               b.dias > 0 ? ' <span class="text-muted small">' + b.dias + ' día' + (b.dias > 1 ? 's' : '') + '</span>' :
+               ' <span class="text-muted small">vence en ' + Math.abs(b.dias) + 'd</span>') +
+            '</div>' +
+            '<strong style="font-family:monospace;color:' + (b.dias > 0 ? 'var(--danger)' : 'var(--text-muted)') + '">$' + fmtN(b.pendiente) + '</strong>' +
+          '</div>' +
+          '<div class="text-muted" style="font-size:10px">' + b.facturas.length + ' factura' + (b.facturas.length > 1 ? 's' : '') + '</div>' +
+        '</div>';
+      });
+    }
+
+    // Mora
+    if (reg.mora && c.totalAjuste > 0) {
+      right += '<div class="ibox mora mt-3"><div class="small text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.5px">📊 Ajuste por mora — ' + fmtDate(HOY) + '</div>';
+      c.bloques.forEach(function(b) {
+        if (!b.interes || b.interes.total < 0.01) return;
+        right += '<div class="mb-2 p-2 rounded" style="background:rgba(0,0,0,.04)">' +
+          '<div class="text-muted mb-1" style="font-size:10px">Vto ' + esc(b.fechaVto) + ' · ' + b.dias + ' días · coef ' + (b.interes.coef * 100).toFixed(4) + '%</div>' +
+          '<div class="d-flex justify-content-between small"><span class="text-muted">Monto vencido</span><span class="fw-semibold">$' + fmtN(b.pendiente) + '</span></div>' +
+          '<div class="d-flex justify-content-between small"><span class="text-muted">Interés 7% mensual</span><span class="text-danger">$' + fmtN(b.interes.interes) + '</span></div>' +
+          '<div class="d-flex justify-content-between small"><span class="text-muted">IVA 21%</span><span class="text-danger">$' + fmtN(b.interes.iva) + '</span></div>' +
+          '<div class="d-flex justify-content-between small fw-bold border-top pt-1 mt-1"><span>Total ajuste</span><span class="text-danger">$' + fmtN(b.interes.total) + '</span></div>' +
+        '</div>';
+      });
+      right += '<div class="d-flex justify-content-between fw-bold border-top pt-2 mt-1"><span>TOTAL AJUSTE DEL DÍA</span><span class="text-danger fs-6">$' + fmtN(c.totalAjuste) + '</span></div>';
+      right += '</div>';
+    } else if (!reg.mora && c.saldo > 0.01) {
+      right += '<div class="ibox mt-3"><div class="small text-muted text-uppercase fw-semibold mb-1" style="letter-spacing:.5px">ℹ️ Sin ajuste por mora</div><div class="small text-muted">Saldo pendiente: <strong>$' + fmtN(c.saldo) + '</strong></div></div>';
+    }
+  }
+
+  // Acciones registradas
+  if (c.acciones && c.acciones.length) {
+    right += '<div class="mt-3"><div class="small text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.5px">Acciones registradas</div>';
+    c.acciones.forEach(function(a) {
+      var ic = {saldada:'✅',nda:'📊',pago_parcial:'💰',obs:'📝'}[a.tipo] || '📌';
+      right += '<div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1 small bg-white">' +
+        '<span>' + ic + ' ' + esc(a.tipo.toUpperCase()) + ' — ' + esc(a.concepto) + (a.monto > 0 ? ' — $' + fmtN(a.monto) : '') + '</span>' +
+        '<div class="d-flex align-items-center gap-2"><span class="text-muted" style="font-size:10px;font-family:monospace">' + esc(a.fecha) + '</span>' +
+        '<button class="btn btn-link btn-sm text-danger p-0" onclick="delAccion(' + a.id + ',\'' + c.codigo + '\')">✕</button></div>' +
+      '</div>';
+    });
+    right += '</div>';
+  }
+
+  // Botones de acción
+  right += '<div class="mt-3 p-3 rounded border bg-light"><div class="small text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.5px">Acciones manuales</div><div class="d-flex gap-2 flex-wrap">';
+  if (c.estado_manual !== 'saldada') {
+    right += '<button class="btn btn-success btn-sm" onclick="abrirAccion(\'' + c.codigo + '\',\'saldada\')">✅ Marcar saldada</button>';
+    right += '<button class="btn btn-primary btn-sm" onclick="abrirAccion(\'' + c.codigo + '\',\'pago_parcial\')">💰 Pago parcial</button>';
+    if (reg.mora && c.totalAjuste > 0.01) {
+      right += '<button class="btn btn-danger btn-sm" onclick="abrirNDA(\'' + c.codigo + '\')">📊 NDA mora</button>';
+    }
+  }
+  right += '<button class="btn btn-outline-secondary btn-sm" onclick="abrirAccion(\'' + c.codigo + '\',\'obs\')">📝 Nota</button>';
+  if (['aviso','suspender','con-mora'].includes(c.estado)) {
+    right += '<button class="btn btn-warning btn-sm" onclick="generarMsg(\'' + c.codigo + '\')">💬 Mensaje</button>';
+  }
+  right += '</div></div>';
+  right += '<div id="msg-' + c.codigo + '" class="mt-2"></div>';
+
+  return '<div class="row g-3">' +
+    '<div class="col-lg-7"><div class="small text-muted text-uppercase fw-semibold mb-2" style="letter-spacing:.5px">Movimientos del período</div>' + movHTML + '</div>' +
+    '<div class="col-lg-5">' + right + '</div>' +
+  '</div>';
+}
+
+// ── Stats ─────────────────────────────────────────────────────
+function updateStats() {
+  var f = getByTipo();
+  document.getElementById('st-susp').textContent = f.filter(function(c){return c.estado==='suspender';}).length;
+  document.getElementById('st-avis').textContent = f.filter(function(c){return c.estado==='aviso';}).length;
+  document.getElementById('st-mora').textContent = f.filter(function(c){return c.estado==='con-mora';}).length;
+  document.getElementById('st-ok').textContent = f.filter(function(c){return c.estado==='al-dia'||c.estado==='pendiente'||c.estado==='a-favor';}).length;
+  document.getElementById('st-favor').textContent = '$' + fmtN(f.reduce(function(s,c){return s+(c.saldo<-0.01?Math.abs(c.saldo):0);},0));
+  document.getElementById('st-ajuste').textContent = '$' + fmtN(f.reduce(function(s,c){return s+(c.totalAjuste||0);},0));
+}
+
+// ── Filtros ───────────────────────────────────────────────────
+function getByTipo() { return FTIPO === 'todos' ? CUENTAS : CUENTAS.filter(function(c){return c.tipo===FTIPO;}); }
+function getFiltered() {
+  var l = getByTipo();
+  if (FEST !== 'todos') l = l.filter(function(c){ return FEST==='ok'?(c.estado==='al-dia'||c.estado==='pendiente'):c.estado===FEST; });
+  if (FBUSQ) { var q = FBUSQ.toLowerCase(); l = l.filter(function(c){return c.nombre.toLowerCase().includes(q)||c.codigo.toLowerCase().includes(q);}); }
+  var ord = {suspender:0,aviso:1,'con-mora':2,'vence-hoy':3,pendiente:4,'al-dia':5,'a-favor':6,saldada:7};
+  l.sort(function(a,b){ return (ord[a.estado]||8)-(ord[b.estado]||8)||a.nombre.localeCompare(b.nombre); });
+  return l;
+}
+function filtEst(e,btn){ FEST=e; document.querySelectorAll('.estado-btn').forEach(function(b){b.classList.remove('active','btn-secondary');b.classList.add('btn-outline-secondary');}); btn.classList.add('active'); render(); }
+function filtrarTipo(t,btn){ FTIPO=t; document.querySelectorAll('.sector-filter').forEach(function(b){b.classList.remove('active');}); btn.classList.add('active'); render(); }
+function filtBusq(q){ FBUSQ=q; render(); }
+function toggle(cod){ var c=document.getElementById('card-'+cod); if(c) c.classList.toggle('open'); }
+function setSector(s,btn){ SECTOR_CARGA=s; document.querySelectorAll('.sector-btn').forEach(function(b){b.classList.remove('active','btn-primary');b.classList.add('btn-outline-secondary');}); btn.classList.remove('btn-outline-secondary'); btn.classList.add('active','btn-primary'); }
+
+// ── Acciones manuales ─────────────────────────────────────────
+function abrirAccion(codigo, tipo) {
+  document.getElementById('mac-codigo').value = codigo;
+  document.getElementById('mac-tipo').value = tipo;
+  document.getElementById('mac-fecha').value = today();
+  document.getElementById('mac-monto').value = '';
+  document.getElementById('mac-concepto').value = '';
+  var titles = {saldada:'✅ Marcar como saldada',pago_parcial:'💰 Registrar pago parcial',nda:'📊 Registrar NDA (ajuste mora)',obs:'📝 Agregar nota'};
+  document.getElementById('mac-title').textContent = titles[tipo] || 'Registrar acción';
+  document.getElementById('mac-monto-wrap').style.display = (tipo==='obs'||tipo==='saldada') ? 'none' : '';
+  document.getElementById('modal-accion').style.display = 'flex';
+}
+
+function abrirNDA(codigo) {
+  var c = CUENTAS.find(function(x){return x.codigo===codigo;});
+  document.getElementById('mac-codigo').value = codigo;
+  document.getElementById('mac-tipo').value = 'nda';
+  document.getElementById('mac-fecha').value = today();
+  document.getElementById('mac-monto').value = (c ? c.totalAjuste : 0).toFixed(2);
+  document.getElementById('mac-concepto').value = 'Ajuste por mora ' + fmtDate(HOY);
+  document.getElementById('mac-title').textContent = '📊 Registrar NDA — Ajuste por mora';
+  document.getElementById('mac-monto-wrap').style.display = '';
+  document.getElementById('modal-accion').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('modal-accion').style.display = 'none'; }
+
+async function confirmarAccion() {
+  var codigo = document.getElementById('mac-codigo').value;
+  var tipo = document.getElementById('mac-tipo').value;
+  var fecha = document.getElementById('mac-fecha').value;
+  var monto = parseFloat(document.getElementById('mac-monto').value) || 0;
+  var concepto = document.getElementById('mac-concepto').value.trim();
+  if (!concepto && tipo !== 'saldada' && tipo !== 'nda') return alert('Ingresá un concepto');
+  var r = await fetch('/api/ccc/accion', {method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({codigo:codigo,tipo:tipo,fecha:fecha,monto:monto,concepto:concepto||tipo})});
+  var data = await r.json();
+  if (!data.ok) return showToast('Error al guardar', true);
+  closeModal();
+  showToast('✅ Acción registrada');
+  await cargarDesdeBD();
+}
+
+async function delAccion(aid, codigo) {
+  if (!confirm('¿Eliminar esta acción?')) return;
+  await fetch('/api/ccc/accion/' + aid, {method:'DELETE'});
+  showToast('✅ Eliminada');
+  await cargarDesdeBD();
+}
+
+async function desmarcarSaldada(codigo) {
+  if (!confirm('¿Desmarcar como saldada?')) return;
+  await fetch('/api/ccc/cuentas/' + codigo, {method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({estado_manual:'',obs_manual:''})});
+  showToast('✅ Desmarcada');
+  await cargarDesdeBD();
+}
+
+// ── Mensaje WhatsApp ──────────────────────────────────────────
+function generarMsg(codigo) {
+  var c = CUENTAS.find(function(x){return x.codigo===codigo;});
+  if (!c) return;
+  var venc = c.bloques.filter(function(b){return b.dias>0;});
+  var total = venc.reduce(function(s,b){return s+b.pendiente;},0);
+  var msg = 'Estimado/a ' + c.nombre + ':\n\n';
+  msg += 'Le informamos que al ' + fmtDate(HOY) + ' registra saldo vencido:\n\n';
+  venc.forEach(function(b){
+    msg += '• Vto. ' + b.fechaVto + ': $' + fmtN(b.pendiente) + ' (' + b.dias + ' días vencido)';
+    if (b.interes && b.interes.total > 0.01) msg += ' — Ajuste: $' + fmtN(b.interes.total);
+    msg += '\n';
+  });
+  msg += '\nTotal adeudado: $' + fmtN(total);
+  if (c.totalAjuste > 0.01) msg += '\nAjuste por mora: $' + fmtN(c.totalAjuste);
+  msg += '\n\n';
+  if (c.estado === 'suspender') msg += '⚠️ La cuenta ha sido SUSPENDIDA hasta regularizar el saldo.\n';
+  else msg += 'Le solicitamos regularizar dentro de las próximas 24 hs para evitar la suspensión.\n';
+  msg += '\nCoop. Transporte — EESS YPF\nTel. 02926 432360';
+  var el = document.getElementById('msg-' + codigo);
+  if (el) el.innerHTML = '<div class="mt-2"><div class="small text-muted text-uppercase fw-semibold mb-1">Mensaje — clic para copiar todo:</div>' +
+    '<pre class="border rounded p-2 bg-light small" style="cursor:pointer;white-space:pre-wrap;word-break:break-word;font-family:monospace" onclick="copiarPre(this)">' + esc(msg) + '</pre></div>';
+}
+
+function copiarPre(el) {
+  navigator.clipboard.writeText(el.textContent).then(function(){showToast('✅ Copiado');});
+}
+
+// ── Exportar ──────────────────────────────────────────────────
+function exportarResumen() {
+  var f = getFiltered();
+  var lines = ['RESUMEN CC — ' + fmtDate(HOY), '='.repeat(50), ''];
+  [{est:'suspender',label:'🔴 SUSPENDER'},{est:'aviso',label:'🟡 AVISAR'},{est:'con-mora',label:'🟠 CON MORA'}].forEach(function(g){
+    var grupo = f.filter(function(c){return c.estado===g.est;});
+    if (!grupo.length) return;
+    lines.push(g.label + ' (' + grupo.length + '):');
+    grupo.forEach(function(c){lines.push('  ' + c.codigo + ' ' + c.nombre + ' — $' + fmtN(c.saldo) + (c.totalAjuste > 0 ? ' — Mora: $' + fmtN(c.totalAjuste) : ''));});
+    lines.push('');
+  });
+  lines.push('='.repeat(50));
+  lines.push('TOTAL MORA: $' + fmtN(f.reduce(function(s,c){return s+(c.totalAjuste||0);},0)));
+  var blob = new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'resumen_cc_' + HOY.toISOString().split('T')[0] + '.txt'; a.click();
+  showToast('✅ Exportado');
+}
+
+// ── PDF ───────────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-box').classList.remove('border-primary');
+  handleFiles(e.dataTransfer.files);
+}
+
+async function handleFiles(files) {
+  var arr = Array.from(files).filter(function(f){return f.name.endsWith('.pdf');});
+  if (!arr.length) { showToast('Solo se aceptan archivos PDF', true); return; }
+  document.getElementById('prog-wrap').style.display = 'block';
+  var fill = document.getElementById('prog-fill');
+  var txt = document.getElementById('prog-text');
+  var allCuentas = [];
+  for (var i = 0; i < arr.length; i++) {
+    txt.textContent = 'Leyendo ' + arr[i].name + '… (' + (i+1) + '/' + arr.length + ')';
+    fill.style.width = ((i / arr.length) * 100) + '%';
+    var text = await extractPDF(arr[i]);
+    var cuentas = parsePDF(text, arr[i].name);
+    allCuentas = allCuentas.concat(cuentas);
+  }
+  fill.style.width = '80%';
+  txt.textContent = 'Guardando en base de datos…';
+  var nombres = arr.map(function(f){return f.name;}).join(', ');
+  var r = await fetch('/api/ccc/upload', {method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cuentas:allCuentas,archivo:nombres,sector:SECTOR_CARGA})});
+  var data = await r.json();
+  fill.style.width = '100%';
+  txt.textContent = '✅ ' + data.cuentas + ' cuentas guardadas';
+  setTimeout(async function(){
+    document.getElementById('prog-wrap').style.display = 'none';
+    await cargarDesdeBD();
+    showToast('✅ ' + data.cuentas + ' cuentas cargadas');
+  }, 800);
+}
+
+async function extractPDF(file) {
+  var buf = await file.arrayBuffer();
+  var pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  var text = '';
+  for (var p = 1; p <= pdf.numPages; p++) {
+    var page = await pdf.getPage(p);
+    var content = await page.getTextContent();
+    var items = content.items.sort(function(a,b){
+      var ya = Math.round(a.transform[5]/5)*5, yb = Math.round(b.transform[5]/5)*5;
+      return ya !== yb ? yb - ya : a.transform[4] - b.transform[4];
+    });
+    var lines = [], lastY = null, cur = [];
+    items.forEach(function(it){
+      var y = Math.round(it.transform[5]/5)*5;
+      if (lastY === null || Math.abs(y-lastY) > 3) { if (cur.length) lines.push(cur.join(' ').trim()); cur = []; lastY = y; }
+      cur.push(it.str);
+    });
+    if (cur.length) lines.push(cur.join(' ').trim());
+    text += lines.join('\n') + '\n';
+  }
+  return text;
+}
+
+function parsePDF(allText, filename) {
+  var lines = allText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var clients = [], cur = null;
+  var tipo = SECTOR_CARGA;
+  var fn = filename.toLowerCase();
+  if (fn.includes('telefon')) tipo = 'telefonos';
+  else if (fn.includes('particular')) tipo = 'socios_particulares';
+  else if (fn.includes('orden') && fn.includes('socio')) tipo = 'orden_socios';
+  else if (fn.includes('orden') && fn.includes('extern')) tipo = 'orden_externos';
+  else if (fn.includes('cliente')) tipo = 'clientes';
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var cm = line.match(/^Cliente:\s*([A-Z0-9]+)\s+(.+)$/);
+    if (cm) {
+      if (cur && cur.movimientos.length > 0) clients.push(cur);
+      cur = {codigo:cm[1],nombre:cm[2].trim(),domicilio:'',localidad:'',tipo:tipo,saldo:0,movimientos:[]};
+      continue;
+    }
+    if (cur && line.startsWith('Domicilio:')) { cur.domicilio = line.replace('Domicilio:','').trim(); continue; }
+    if (cur && line.startsWith('Localidad:')) { cur.localidad = line.replace('Localidad:','').replace(/\([^)]+\)/,'').trim(); continue; }
+    if (cur) {
+      var mm = line.match(/^(\d{1,2}\/\d{1,2}\/\d{4})\s+([A-Z]{2,4}-\d{4}-\d{8})(.*)/);
+      if (mm) {
+        var fecha=mm[1], comp=mm[2], tipo2=comp.split('-')[0], resto=mm[3].trim();
+        var fechaVto = '';
+        var vm = resto.match(/^(\d{1,2}\/\d{1,2}\/\d{4})\s*(.*)/);
+        if (vm) { fechaVto = vm[1]; resto = vm[2]; }
+        if (!fechaVto && (tipo2==='FAA'||tipo2==='FAB')) {
+          var vc = calcVencimiento(fecha);
+          if (vc) fechaVto = vc.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+        }
+        var np = /[\d.]+,\d{2}/g, nums = [], nm2;
+        while ((nm2 = np.exec(resto)) !== null) nums.push(parseFloat(nm2[0].replace(/\./g,'').replace(',','.')));
+        var desc = resto.replace(/[\d.]+,\d{2}/g,'').replace(/\([\d.]+,\d{2}\)/g,'').trim();
+        var debe=0, haber=0, saldo=0;
+        if (nums.length >= 3) { debe=nums[nums.length-3]; haber=nums[nums.length-2]; saldo=nums[nums.length-1]; }
+        else if (nums.length === 2) { debe=nums[0]; saldo=nums[1]; }
+        else if (nums.length === 1) { debe=nums[0]; }
+        var snm = resto.match(/\(([\d.]+,\d{2})\)\s*$/);
+        if (snm) saldo = -parseFloat(snm[1].replace(/\./g,'').replace(',','.'));
+        cur.movimientos.push({fecha:fecha,comprobante:comp,tipo:tipo2,descripcion:desc,fechaVto:fechaVto,debe:debe,haber:haber,saldo:saldo});
+        continue;
+      }
+      var sfm = line.match(/^Saldo\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})/);
+      if (sfm && cur) {
+        if (cur.movimientos.length) cur.saldo = cur.movimientos[cur.movimientos.length-1].saldo;
+        continue;
+      }
+    }
+  }
+  if (cur && cur.movimientos.length > 0) clients.push(cur);
+  return clients;
+}
+
+// ── UI helpers ────────────────────────────────────────────────
+function mostrarUI() {
+  document.getElementById('upload-box').style.display = 'none';
+  document.getElementById('tipo-tabs').style.display = 'flex';
+  document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('filters-bar').style.display = 'flex';
+  document.getElementById('mensaje-box').style.display = '';
+  document.getElementById('btn-export').style.display = '';
+  var addBtn = document.getElementById('btn-add-pdf');
+  if (addBtn) addBtn.style.display = '';
+}
+
+function resetUI() {
+  // Vuelve al estado inicial: muestra upload, oculta todo lo demás
+  CUENTAS = [];
+  document.getElementById('upload-box').style.display = '';
+  document.getElementById('tipo-tabs').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+  document.getElementById('filters-bar').style.display = 'none';
+  document.getElementById('mensaje-box').style.display = 'none';
+  document.getElementById('btn-export').style.display = 'none';
+  var addBtn = document.getElementById('btn-add-pdf');
+  if (addBtn) addBtn.style.display = 'none';
+  document.getElementById('last-load').textContent = 'Sin datos cargados';
+  document.getElementById('content').innerHTML =
+    '<div class="text-center py-5 text-muted"><div style="font-size:40px">📊</div><div class="mt-2">Subí el PDF para ver las cuentas</div></div>';
+}
+
+async function eliminarSectorActual() {
+  if (!confirm('¿Eliminar toda la carga del sector "' + SECTOR_CARGA + '"? Esta acción no se puede deshacer.')) return;
+  var r = await fetch('/api/ccc/sector/' + encodeURIComponent(SECTOR_CARGA), {method:'DELETE'});
+  var data = await r.json();
+  if (!data.ok) { showToast(data.error || 'No se pudo eliminar', true); return; }
+  showToast('✅ Sector eliminado: ' + SECTOR_CARGA);
+  // Reload from DB — cargarDesdeBD will call resetUI if no data remains
+  await cargarDesdeBD();
+}
+
+// ── Mensaje plantilla ─────────────────────────────────────────
+async function cargarMensajeResumen() {
+  try {
+    var venc = (document.getElementById('msg-vencimiento')?.value || '').trim();
+    var r = await fetch('/api/ccc/mensaje?vencimiento=' + encodeURIComponent(venc));
+    if (!r.ok) return;
+    var data = await r.json();
+    var tpl = document.getElementById('msg-template');
+    var preview = document.getElementById('msg-preview');
+    if (tpl) tpl.value = data.template || '';
+    if (preview) preview.textContent = data.preview || '';
+  } catch(e) { console.error(e); }
+}
+
+async function guardarMensajeResumen() {
+  var mensaje = (document.getElementById('msg-template')?.value || '').trim();
+  if (!mensaje) { showToast('El mensaje no puede estar vacío', true); return; }
+  var r = await fetch('/api/ccc/mensaje', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:mensaje})});
+  var data = await r.json();
+  if (!data.ok) { showToast(data.error || 'Error al guardar', true); return; }
+  await cargarMensajeResumen();
+  showToast('✅ Mensaje guardado');
+}
+
+async function copiarMensajeResumen() {
+  await cargarMensajeResumen();
+  var texto = document.getElementById('msg-preview')?.textContent || '';
+  if (!texto.trim()) { showToast('No hay mensaje para copiar', true); return; }
+  navigator.clipboard.writeText(texto).then(function(){showToast('✅ Mensaje copiado');});
+}
+
+// ── Utils ─────────────────────────────────────────────────────
+function fmtN(n){ return parseFloat(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showToast(msg, err) {
+  var t = document.createElement('div');
+  t.className = 'alert alert-' + (err ? 'danger' : 'success');
+  t.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;min-width:220px;box-shadow:var(--shadow-md);animation:fadeIn .2s';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(function(){t.remove();},300); }, 2500);
+}
+</script>
+{% endblock %}

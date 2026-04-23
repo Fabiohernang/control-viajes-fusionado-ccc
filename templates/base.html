@@ -1,0 +1,197 @@
+{% set endpoint = request.endpoint or '' %}
+
+{% set nav_groups = [
+  {
+    'key': 'inicio',
+    'label': 'Inicio',
+    'icon': 'bi-house-door',
+    'url': url_for('main.index'),
+    'links': [
+      ('main.index', 'Panel')
+    ]
+  },
+  {
+    'key': 'operacion',
+    'label': 'Operación',
+    'icon': 'bi-truck',
+    'url': url_for('viajes.viajes'),
+    'links': [
+      ('viajes.viajes', 'Viajes'),
+      ('facturas.importar_factura_pdf', 'Importar factura'),
+      ('viajes.nuevo_viaje', 'Nuevo viaje'),
+      ('facturas.facturas', 'Facturas')
+    ]
+  },
+  {
+    'key': 'fleteros',
+    'label': 'Fleteros',
+    'icon': 'bi-person-vcard',
+    'url': url_for('liquidaciones.liquidaciones'),
+    'links': [
+      ('liquidaciones.liquidaciones', 'Liquidaciones'),
+      ('liquidaciones.buscar_pagos_fleteros', 'Buscar pagos'),
+      ('liquidaciones.importar_liquidacion_pdf', 'Importar liquidación')
+    ]
+  },
+  {
+    'key': 'cobranzas',
+    'label': 'Cobranzas',
+    'icon': 'bi-cash-stack',
+    'url': url_for('facturas.cobranzas'),
+    'links': [
+      ('facturas.cobranzas', 'Resumen'),
+      ('pagos.pagos', 'Pagos recibidos')
+    ]
+  },
+  {
+    'key': 'config',
+    'label': 'Configuración',
+    'icon': 'bi-gear',
+    'url': url_for('viajes.configuracion'),
+    'links': [
+      ('viajes.configuracion', 'Sistema'),
+      ('auth.cambiar_contrasena', 'Contraseña')
+    ]
+  }
+] %}
+
+{% set active_group = 'inicio' %}
+{% if endpoint in ['viajes.viajes', 'facturas.facturas', 'facturas.detalle_factura', 'facturas.editar_percepciones', 'facturas.importar_factura_pdf', 'facturas.confirmar_importacion_factura_pdf', 'facturas.cancelar_importacion_factura_pdf', 'viajes.nuevo_viaje', 'viajes.editar_viaje'] %}
+  {% set active_group = 'operacion' %}
+{% elif endpoint in ['liquidaciones.liquidaciones', 'liquidaciones.nueva_liquidacion', 'liquidaciones.editar_liquidacion', 'liquidaciones.detalle_liquidacion', 'liquidaciones.pagar_liquidacion', 'liquidaciones.buscar_pagos_fleteros', 'liquidaciones.editar_pago_liquidacion', 'liquidaciones.eliminar_pago_liquidacion', 'liquidaciones.recibo_liquidacion', 'liquidaciones.importar_liquidacion_pdf'] %}
+  {% set active_group = 'fleteros' %}
+{% elif endpoint in ['facturas.cobranzas', 'pagos.pagos', 'pagos.nuevo_pago', 'pagos.editar_pago', 'pagos.caja', 'pagos.cuotas_seguros'] %}
+  {% set active_group = 'cobranzas' %}
+{% elif endpoint in ['viajes.configuracion', 'auth.cambiar_contrasena', 'viajes.tarifario', 'viajes.recalcular_todo'] %}
+  {% set active_group = 'config' %}
+{% elif endpoint == 'main.index' or endpoint == 'main.reportes' %}
+  {% set active_group = 'inicio' %}
+{% endif %}
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Control viajes{% endblock %}</title>
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="portal-body">
+
+<header class="top-shell">
+  <div class="top-shell-main">
+    <div class="brand-side">
+      <a href="{{ url_for('main.index') }}" class="brand-link">
+        <img src="{{ url_for('static', filename='logo-cooperativa.PNG') }}" alt="Logo cooperativa" class="brand-logo-top">
+        <div class="brand-copy">
+          <div class="brand-title-top">Coop. Prov. Cons y Cred Transporte Automotor Ltda.</div>
+          <div class="brand-subtitle-top">CUIT: 30-53034113-1 · Tel: 2926 410134</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="top-actions">
+      <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+        <button class="btn btn-sm btn-outline-light" type="submit">
+          <i class="bi bi-box-arrow-right me-1"></i> Salir
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <nav class="primary-nav">
+    {% for group in nav_groups %}
+      <a href="{{ group.url }}"
+         class="primary-nav-btn {% if active_group == group.key %}active{% endif %}">
+        <i class="bi {{ group.icon }}"></i>
+        <span>{{ group.label }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+
+  <div class="secondary-nav-wrap">
+    {% for group in nav_groups %}
+      {% if active_group == group.key %}
+        <div class="secondary-nav active">
+          {% for ep, label in group["links"] %}
+            <a
+              href="{{ url_for(ep) }}"
+              class="secondary-nav-link {% if endpoint == ep %}active{% endif %}">
+              {{ label }}
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</header>
+
+<main class="portal-main">
+  <div class="portal-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack mb-4" id="flash-stack">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ 'warning' if category == 'warning' else 'success' if category == 'success' else 'info' }} mb-2 flash-msg" role="alert" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+              <span>{{ message }}</span>
+              <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;line-height:1;opacity:0.6;" title="Cerrar">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+        <script>
+          setTimeout(function() {
+            var msgs = document.querySelectorAll('.flash-msg');
+            msgs.forEach(function(el) {
+              el.style.transition = 'opacity 0.5s';
+              el.style.opacity = '0';
+              setTimeout(function() { el.remove(); }, 500);
+            });
+          }, 4000);
+        </script>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ── CSRF: inyectar token en todos los formularios POST automáticamente ──
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (csrfToken) {
+    document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(form => {
+      if (!form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = csrfToken;
+        form.appendChild(input);
+      }
+    });
+  }
+
+  // ── Flashes: auto-dismiss después de 4 segundos ──
+  document.querySelectorAll('.alert.alert-dismissible').forEach(alert => {
+    setTimeout(() => {
+      const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+      bsAlert.close();
+    }, 4000);
+  });
+
+  // ── Eliminar: pedir confirmación antes de borrar ──
+  document.querySelectorAll('[data-confirm]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      if (!confirm(btn.dataset.confirm)) e.preventDefault();
+    });
+  });
+</script>
+{% block scripts %}{% endblock %}
+
+</body>
+</html>
