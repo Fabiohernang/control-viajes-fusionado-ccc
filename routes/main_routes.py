@@ -56,13 +56,14 @@ def index():
         ).scalar()
     )
 
-    total_pagado_fleteros_mes = to_decimal(
-        db.session.query(func.coalesce(func.sum(LiquidacionFletero.total_pagado), 0))
-        .filter(
-            func.extract("year",  LiquidacionFletero.fecha) == hoy.year,
-            func.extract("month", LiquidacionFletero.fecha) == hoy.month,
-        ).scalar()
-    )
+    liquidaciones_mes = LiquidacionFletero.query.filter(
+    func.extract("year", LiquidacionFletero.fecha) == hoy.year,
+    func.extract("month", LiquidacionFletero.fecha) == hoy.month,
+).all()
+
+    total_pagado_fleteros_mes = quantize_money(
+    sum((to_decimal(l.total_pagado) for l in liquidaciones_mes), Decimal("0"))
+)
 
     # Pendiente = suma de importe_total de facturas no pagadas
     # (aproximación válida para KPI de dashboard)
