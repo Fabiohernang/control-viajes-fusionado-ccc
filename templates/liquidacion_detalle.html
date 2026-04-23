@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Detalle liquidación{% endblock %}
+
+{% block content %}
+
+<div class="module-header mb-4">
+  <div class="module-header-left">
+    <div class="module-title">Liquidación de {{ liquidacion.fletero }}</div>
+    <div class="module-subtitle">Fecha {{ liquidacion.fecha.strftime('%d/%m/%Y') }}</div>
+  </div>
+  <div class="module-header-actions">
+    <a href="{{ url_for('liquidaciones.recibo_liquidacion', liquidacion_id=liquidacion.id) }}" target="_blank" class="btn btn-sm btn-dark">
+      <i class="bi bi-printer me-1"></i> Recibo / impresión
+    </a>
+    <a href="{{ url_for('liquidaciones.pagar_liquidacion', liquidacion_id=liquidacion.id) }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-cash-coin me-1"></i> Registrar pago
+    </a>
+    <a href="{{ url_for('liquidaciones.editar_liquidacion', liquidacion_id=liquidacion.id) }}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-pencil-square me-1"></i> Editar
+    </a>
+    <a href="{{ url_for('liquidaciones.liquidaciones') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-blue">
+      <div class="card-body">
+        <div class="kpi-label">Bruto</div>
+        <div class="kpi-money">{{ liquidacion.total_bruto|ars }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-yellow">
+      <div class="card-body">
+        <div class="kpi-label">Descuentos</div>
+        <div class="kpi-money">{{ liquidacion.total_descuentos|ars }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-green">
+      <div class="card-body">
+        <div class="kpi-label">Pagado</div>
+        <div class="kpi-money">{{ liquidacion.total_pagado|ars }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card kpi-card kpi-accent-dark">
+      <div class="card-body">
+        <div class="kpi-label">Saldo pendiente</div>
+        <div class="kpi-money">{{ liquidacion.saldo_pendiente|ars }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Datos generales</div>
+  <div class="admin-panel-body">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="kpi-label">Factura fletero</div>
+        <div><strong>{{ liquidacion.factura_fletero or '-' }}</strong></div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="kpi-label">Estado</div>
+        <div>
+          {% if liquidacion.estado == 'pagada' %}
+            <span class="badge text-bg-success">Pagada</span>
+          {% elif liquidacion.estado == 'parcial' %}
+            <span class="badge text-bg-warning">Parcial</span>
+          {% else %}
+            <span class="badge text-bg-secondary">Pendiente</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="kpi-label">Observaciones</div>
+        <div>{{ liquidacion.observaciones or '-' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Viajes incluidos</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Factura</th>
+          <th>Origen</th>
+          <th>Destino</th>
+          <th class="text-end">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in liquidacion.items %}
+        <tr>
+          <td>{{ item.viaje.fecha.strftime('%d/%m/%Y') }}</td>
+          <td>{{ item.viaje.cliente }}</td>
+          <td>{{ item.viaje.factura or '-' }}</td>
+          <td>{{ item.viaje.origen or '-' }}</td>
+          <td>{{ item.viaje.destino or '-' }}</td>
+          <td class="text-end amount-cell amount-strong">{{ item.importe|ars }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center py-4 text-secondary">No hay viajes incluidos.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="admin-panel mb-4">
+  <div class="admin-panel-title">Descuentos</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Concepto</th>
+          <th class="text-end">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in liquidacion.descuentos %}
+        <tr>
+          <td>{{ d.concepto }}</td>
+          <td class="text-end amount-cell amount-strong">{{ d.importe|ars }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="2" class="text-center py-4 text-secondary">No hay descuentos cargados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="admin-panel">
+  <div class="admin-panel-title">Pagos registrados</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 admin-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Medio</th>
+          <th>Número / referencia</th>
+          <th class="text-end">Importe</th>
+          <th>Observaciones</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in liquidacion.pagos %}
+        <tr>
+          <td>{{ p.fecha.strftime('%d/%m/%Y') }}</td>
+          <td>{{ p.medio }}</td>
+          <td>{{ p.numero or '-' }}</td>
+          <td class="text-end amount-cell amount-strong">{{ p.importe|ars }}</td>
+          <td>{{ p.observaciones or '-' }}</td>
+          <td class="text-end">
+            <div class="d-inline-flex gap-2">
+              <a href="{{ url_for('liquidaciones.editar_pago_liquidacion', liquidacion_id=liquidacion.id, pago_id=p.id) }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-pencil-square me-1"></i> Editar
+              </a>
+              <form method="post" action="{{ url_for('liquidaciones.eliminar_pago_liquidacion', liquidacion_id=liquidacion.id, pago_id=p.id) }}" onsubmit="return confirm('¿Eliminar este pago?');" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash me-1"></i> Eliminar
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center py-4 text-secondary">Todavía no tiene pagos registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="admin-panel-body border-top">
+    <form method="post" action="{{ url_for('liquidaciones.eliminar_liquidacion', liquidacion_id=liquidacion.id) }}" onsubmit="return confirm('¿Eliminar esta liquidación?');">
+      <button type="submit" class="btn btn-outline-danger">
+        <i class="bi bi-trash me-1"></i> Eliminar liquidación
+      </button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
