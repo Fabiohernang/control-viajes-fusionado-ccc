@@ -48,14 +48,9 @@ def liquidaciones():
     return render_template("liquidaciones.html", items=items, q=q, stats=stats)
 
 
-# =========================
-# IMPORTAR ARCHIVO
-# =========================
-
 @liquidaciones_bp.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
 @login_required
 def importar_liquidacion_pdf():
-
     if request.method == "POST":
         archivo = request.files.get("archivo")
 
@@ -74,11 +69,7 @@ def importar_liquidacion_pdf():
             resultados = []
             for item in data.get("items", []):
                 ctg = str(item.get("ctg") or "").strip()
-
-                coincidencias = []
-                if ctg:
-                    coincidencias = Viaje.query.filter_by(ctg=ctg).all()
-
+                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
                 resultados.append({
                     "item": item,
                     "coincidencias": coincidencias,
@@ -87,12 +78,7 @@ def importar_liquidacion_pdf():
 
             tipo = "Excel" if nombre.endswith(".xls") or nombre.endswith(".xlsx") else "PDF"
             flash(f"{tipo} procesado correctamente", "success")
-
-            return render_template(
-                "liquidacion_preview.html",
-                data=data,
-                resultados=resultados
-            )
+            return render_template("liquidacion_preview.html", data=data, resultados=resultados)
 
         except Exception as e:
             print("ERROR importar_liquidacion_archivo:", e)
@@ -102,14 +88,9 @@ def importar_liquidacion_pdf():
     return render_template("importar_liquidacion_pdf.html")
 
 
-# =========================
-# BUSCAR PAGOS
-# =========================
-
 @liquidaciones_bp.route("/liquidaciones/buscar-pagos")
 @login_required
 def buscar_pagos_fleteros():
-
     q = request.args.get("q", "").strip()
     medio = request.args.get("medio", "").strip()
     fecha_desde_raw = request.args.get("fecha_desde", "").strip()
@@ -136,24 +117,18 @@ def buscar_pagos_fleteros():
 
     if q:
         like = f"%{q}%"
-
         filtros = [
             LiquidacionPago.numero.ilike(like),
             LiquidacionFletero.fletero.ilike(like),
             LiquidacionFletero.factura_fletero.ilike(like),
             LiquidacionPago.observaciones.ilike(like),
         ]
-
         query = query.filter(or_(*filtros))
 
     items = query.order_by(LiquidacionPago.fecha.desc()).all()
-
     total = quantize_money(sum((to_decimal(x.importe) for x in items), Decimal("0")))
 
-    stats = {
-        "cantidad": len(items),
-        "total": total
-    }
+    stats = {"cantidad": len(items), "total": total}
 
     return render_template(
         "buscar_pagos_fleteros.html",
@@ -162,22 +137,16 @@ def buscar_pagos_fleteros():
         q=q,
         medio=medio,
         fecha_desde=fecha_desde_raw,
-        fecha_hasta=fecha_hasta_raw
+        fecha_hasta=fecha_hasta_raw,
     )
 
-
-# =========================
-# NUEVA LIQUIDACION
-# =========================
 
 @liquidaciones_bp.route("/liquidaciones/nueva", methods=["GET", "POST"])
 @login_required
 def nueva_liquidacion():
-
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
 
     if request.method == "POST":
-
         fecha_raw = request.form.get("fecha", "")
         fecha_liq = datetime.strptime(fecha_raw, "%Y-%m-%d").date() if fecha_raw else date.today()
 
@@ -193,7 +162,7 @@ def nueva_liquidacion():
             fecha=fecha_liq,
             fletero=fletero,
             factura_fletero=factura_fletero,
-            observaciones=observaciones
+            observaciones=observaciones,
         )
 
         db.session.add(liquidacion)
@@ -220,14 +189,13 @@ def editar_liquidacion(liquidacion_id):
         liquidacion.items.clear()
         liquidacion.descuentos.clear()
 
-        viaje_ids = request.form.getlist("viaje_ids")
-        viaje_ids = [int(x) for x in viaje_ids if str(x).strip()]
+        viaje_ids = [int(x) for x in request.form.getlist("viaje_ids") if str(x).strip()]
         for viaje_id in viaje_ids:
             viaje = db.session.get(Viaje, viaje_id)
             if viaje:
                 liquidacion.items.append(LiquidacionItem(
                     viaje_id=viaje.id,
-                    importe=quantize_money(to_decimal(viaje.total_importe))
+                    importe=quantize_money(to_decimal(viaje.total_importe)),
                 ))
 
         conceptos = request.form.getlist("descuento_concepto[]")
@@ -238,7 +206,7 @@ def editar_liquidacion(liquidacion_id):
             if concepto and importe_dec > 0:
                 liquidacion.descuentos.append(LiquidacionDescuento(
                     concepto=concepto,
-                    importe=quantize_money(importe_dec)
+                    importe=quantize_money(importe_dec),
                 ))
 
         recalcular_liquidacion(liquidacion)
@@ -311,7 +279,7 @@ def pagar_liquidacion(liquidacion_id):
         pago=None,
         accion_url=url_for("liquidaciones.pagar_liquidacion", liquidacion_id=liquidacion.id),
         titulo="Registrar pago de liquidación",
-        boton="Guardar pago"
+        boton="Guardar pago",
     )
 
 
@@ -350,7 +318,7 @@ def editar_pago_liquidacion(liquidacion_id, pago_id):
         pago=pago,
         accion_url=url_for("liquidaciones.editar_pago_liquidacion", liquidacion_id=liquidacion.id, pago_id=pago.id),
         titulo="Editar pago de liquidación",
-        boton="Guardar cambios"
+        boton="Guardar cambios",
     )
 
 
@@ -381,41 +349,6 @@ def recibo_liquidacion(liquidacion_id):
     recalcular_liquidacion(liquidacion)
     db.session.commit()
     return render_template("liquidacion_recibo.html", liquidacion=liquidacion)
-
-
-# =========================
-# HIDRATAR VIAJE
-# =========================
-
-def hydrate_viaje(viaje, form):
-    fecha_raw = form.get("fecha", "")
-    viaje.fecha = datetime.strptime(fecha_raw, "%Y-%m-%d").date() if fecha_raw else date.today()
-    viaje.cliente = form.get("cliente", "").strip()
-    viaje.factura = form.get("factura", "").strip() or None
-    viaje.fletero = form.get("fletero", "").strip()
-    viaje.socio = form.get("socio") == "si"
-    viaje.ctg = form.get("ctg", "").strip() or None
-    viaje.origen = form.get("origen", "").strip() or None
-    viaje.destino = form.get("destino", "").strip() or None
-    viaje.producto = form.get("producto", "").strip() or None
-    viaje.kilometros = to_decimal(form.get("kilometros", "0"))
-
-    tarifa_manual = form.get("tarifa", "").strip()
-    usar_tarifario = form.get("usar_tarifario") == "si"
-
-    if usar_tarifario and viaje.kilometros and to_decimal(viaje.kilometros) > 0:
-        match = buscar_tarifa_por_km(viaje.kilometros)
-        if match:
-            viaje.tarifa = to_decimal(match.tarifa_tn)
-        else:
-            viaje.tarifa = to_decimal(tarifa_manual, "0"))
-    else:
-        viaje.tarifa = to_decimal(tarifa_manual, "0")
-
-    viaje.descuento = to_decimal(form.get("descuento", "0"))
-    viaje.kg = to_decimal(form.get("kg", "0"))
-    viaje.liquidado = form.get("liquidado") == "si"
-    viaje.observaciones = form.get("observaciones", "").strip() or None
 
 
 # =========================
