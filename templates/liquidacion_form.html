@@ -1,103 +1,69 @@
 {% extends "base.html" %}
-{% block title %}{% if liquidacion %}Editar liquidación{% else %}Nueva liquidación{% endif %}
-{% endblock %}
+{% block title %}Nueva liquidación{% endblock %}
 
 {% block content %}
-<div class="hero-panel mb-4">
-  <h1 class="page-title">Liquidación de fletero</h1>
-</div>
+<h2>Liquidación de fletero</h2>
 
-<form method="post" class="row g-4">
+<form method="post">
 
-  <div class="col-md-3">
-    <label>Fecha</label>
-    <input class="form-control" type="date" name="fecha" required>
-  </div>
+Fletero: <input name="fletero" id="fletero"><br>
+Fecha: <input type="date" name="fecha"><br>
 
-  <div class="col-md-4">
-    <label>Fletero</label>
-    <input class="form-control" name="fletero" required>
-  </div>
+<input id="buscar" placeholder="buscar cliente / ctg">
+<button type="button" onclick="filtrarFletero()">solo fletero</button>
 
-  <div class="col-md-5">
-    <label>Factura fletero</label>
-    <input class="form-control" name="factura_fletero">
-  </div>
+<table border="1">
+<tr>
+<th></th><th>CTG</th><th>Cliente</th><th>Origen</th><th>Destino</th><th>Kg</th><th>Tarifa</th><th>Total</th>
+</tr>
+{% for v in viajes %}
+<tr class="fila" data-fletero="{{v.fletero}}" data-texto="{{v.cliente}} {{v.ctg}}">
+<td><input type="checkbox" name="viaje_ids" value="{{v.id}}" data-importe="{{v.importe_con_iva}}"></td>
+<td>{{v.ctg}}</td>
+<td>{{v.cliente}}</td>
+<td>{{v.origen}}</td>
+<td>{{v.destino}}</td>
+<td>{{v.kg}}</td>
+<td>{{v.tarifa}}</td>
+<td>{{v.importe_con_iva}}</td>
+</tr>
+{% endfor %}
+</table>
 
-  <div class="col-lg-7">
-    <h5>Viajes</h5>
-    <div class="table-responsive">
-      <table class="table">
-        <thead>
-          <tr>
-            <th></th>
-            <th>CTG</th>
-            <th>Cliente</th>
-            <th>Kg</th>
-            <th>Importe</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for v in viajes %}
-          <tr>
-            <td><input type="checkbox" name="viaje_ids" value="{{ v.id }}" data-importe="{{ v.importe_con_iva }}" data-comision="{{ v.comision }}"></td>
-            <td>{{ v.ctg }}</td>
-            <td>{{ v.cliente }}</td>
-            <td>{{ v.kg }}</td>
-            <td>{{ v.importe_con_iva }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+<h3>Ajustes</h3>
+Comision <input id="comision" name="comision_manual"><br>
+Combustible <input name="combustible"><br>
+IIBB <input name="retencion_iibb"><br>
+Percepciones <input name="percepciones_comision"><br>
 
-  <div class="col-lg-5">
-    <h5>Ajustes</h5>
+<h3>Total: <span id="total">0</span></h3>
 
-    <label>Comisión</label>
-    <input class="form-control" name="comision_manual" id="comision">
-
-    <label>Combustible</label>
-    <input class="form-control" name="combustible">
-
-    <label>Retención IIBB</label>
-    <input class="form-control" name="retencion_iibb">
-
-    <label>Percepciones factura comisión</label>
-    <input class="form-control" name="percepciones_comision">
-
-    <label>Otros</label>
-    <input class="form-control" name="otros_descuentos">
-
-    <hr>
-
-    <div><b>Total viajes:</b> <span id="total_viajes">0</span></div>
-    <div><b>Total comisión:</b> <span id="total_comision">0</span></div>
-  </div>
-
-  <button class="btn btn-primary">Guardar</button>
+<button>Guardar</button>
 </form>
 
 <script>
-document.querySelectorAll('input[type=checkbox]').forEach(chk => {
-  chk.addEventListener('change', () => {
-    let total = 0;
-    let comision = 0;
+let filas = document.querySelectorAll('.fila');
+let buscar = document.getElementById('buscar');
 
-    document.querySelectorAll('input[type=checkbox]:checked').forEach(c => {
-      total += parseFloat(c.dataset.importe || 0);
-      comision += parseFloat(c.dataset.comision || 0);
-    });
+buscar.oninput = ()=>{
+ let val = buscar.value.toLowerCase();
+ filas.forEach(f=>{
+  f.style.display = f.dataset.texto.toLowerCase().includes(val)?'':'none';
+ });
+}
 
-    document.getElementById('total_viajes').innerText = total.toFixed(2);
-    document.getElementById('total_comision').innerText = comision.toFixed(2);
+function filtrarFletero(){
+ let f = document.getElementById('fletero').value.toLowerCase();
+ filas.forEach(row=>{
+  row.style.display = row.dataset.fletero.toLowerCase()==f?'':'none';
+ });
+}
 
-    let inputCom = document.getElementById('comision');
-    if (!inputCom.value) {
-      inputCom.value = comision.toFixed(2);
-    }
-  });
+let checks = document.querySelectorAll('input[type=checkbox]');
+checks.forEach(c=>c.onchange = ()=>{
+ let t=0;
+ checks.forEach(x=>{ if(x.checked) t+=parseFloat(x.dataset.importe||0); });
+ document.getElementById('total').innerText=t;
 });
 </script>
 
