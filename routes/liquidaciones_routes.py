@@ -1,30 +1,41 @@
-# (contenido igual hasta _guardar_items_y_descuentos)
+from flask import Blueprint, render_template, request, redirect, url_for
+from extensions import db
+from models import LiquidacionFletero, Viaje, LiquidacionItem
+from routes.helpers import login_required, recalcular_liquidacion
+from utils import to_decimal, quantize_money
+from datetime import date
 
-def _guardar_items_y_descuentos(liquidacion, form):
-    prev_items = list(liquidacion.items)
-    for item in prev_items:
-        if item.viaje:
-            item.viaje.liquidado = False
+liquidaciones_bp = Blueprint("liquidaciones", __name__)
 
-    liquidacion.items.clear()
-    liquidacion.descuentos.clear()
-    db.session.flush()
+@liquidaciones_bp.route("/liquidaciones")
+@login_required
+def liquidaciones():
+    liquidaciones = LiquidacionFletero.query.order_by(LiquidacionFletero.fecha.desc()).all()
+    return render_template("liquidaciones.html", liquidaciones=liquidaciones)
 
-    viaje_ids = [int(x) for x in form.getlist("viaje_ids") if str(x).strip()]
-    for viaje_id in viaje_ids:
-        viaje = db.session.get(Viaje, viaje_id)
-        if not viaje or not _es_liquidable(viaje):
-            continue
-        if viaje.fletero.strip().lower() != liquidacion.fletero.strip().lower():
-            continue
-        viaje.liquidado = True
-        liquidacion.items.append(
-            LiquidacionItem(
-                viaje_id=viaje.id,
-                importe=quantize_money(to_decimal(viaje.importe_con_iva)),
-            )
-        )
+@liquidaciones_bp.route("/liquidaciones/nueva", methods=["GET","POST"])
+@login_required
+def nueva_liquidacion():
+    if request.method == "POST":
+        fletero = request.form.get("fletero")
+        fecha = request.form.get("fecha") or date.today()
 
-    # YA NO SE CARGAN DESCUENTOS EN ESTA ETAPA
+        liq = LiquidacionFletero(fletero=fletero, fecha=fecha)
+        db.session.add(liq)
+        db.session.flush()
 
-    recalcular_liquidacion(liquidacion)
+        viaje_ids = request.form.getlist("viaje_ids")
+        for vid in viaje_ids:
+            v = db.session.get(Viaje, int(vid))
+            if v:
+                v.liquidado = True
+                liq.items.append(LiquidacionItem(viaje_id=v.id, importe=quantize_money(to_decimal(v.importe_con_iva))))
+
+        recalcular_liquidacion(liq)
+        db.session.commit()
+
+        return redirect(url_for("liquidaciones.liquidaciones"))
+
+    viajes = Viaje.query.filter_by(liquidado=False).all()
+    fleteros = sorted(set([v.fletero for v in Viaje.query.all() if v.fletero]))
+    return render_template("liquidacion_form.html", viajes=viajes, fleteros=fleteros)
