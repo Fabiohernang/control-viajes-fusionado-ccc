@@ -9,10 +9,7 @@
     <div class="module-subtitle">Listado general de viajes y control operativo</div>
   </div>
   <div class="module-header-actions">
-    <a class="btn btn-sm btn-primary" href="{{ url_for('facturas.importar_factura_pdf') }}">
-      <i class="bi bi-file-earmark-arrow-up me-1"></i> Importar factura
-    </a>
-    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('viajes.nuevo_viaje') }}">
+    <a class="btn btn-sm btn-primary" href="{{ url_for('viajes.nuevo_viaje') }}">
       <i class="bi bi-plus-circle me-1"></i> Nuevo viaje
     </a>
   </div>
@@ -106,7 +103,9 @@
           <td class="text-end">{{ v.kg }}</td>
           <td class="text-end">{{ v.total_importe|ars }}</td>
           <td>
-            {% if v.liquidado %}
+            {% if no_liquidar_tag is defined and no_liquidar_tag in (v.observaciones or '') %}
+              <span class="badge text-bg-warning">No liquidar</span>
+            {% elif v.liquidado %}
               <span class="badge text-bg-success">Liquidado</span>
             {% else %}
               <span class="badge text-bg-secondary">Pendiente</span>
