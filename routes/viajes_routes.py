@@ -19,6 +19,16 @@ viajes_bp = Blueprint("viajes", __name__)
 NO_LIQUIDAR_TAG = "[NO_LIQUIDAR]"
 
 
+def _rates_context():
+    matias_rate = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
+    return {
+        "iva_rate": float(get_config_decimal("iva_rate", "0.21")),
+        "socio_rate": float(get_config_decimal("socio_commission_rate", "0.06")),
+        "no_socio_rate": float(get_config_decimal("no_socio_commission_rate", "0.10")),
+        "matias_rate": float(matias_rate),
+    }
+
+
 @viajes_bp.route("/api/tarifa")
 @login_required
 def api_tarifa():
@@ -83,6 +93,20 @@ def _recalcular_viaje(viaje):
         viaje.comision_lucas = Decimal("0")
 
 
+def _form_context(viaje=None):
+    productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
+    fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
+    ctx = {
+        "viaje": viaje,
+        "productores": productores,
+        "fleteros": fleteros,
+        "factura_prefijo": "0007-000",
+        "no_liquidar_tag": NO_LIQUIDAR_TAG,
+    }
+    ctx.update(_rates_context())
+    return ctx
+
+
 @viajes_bp.route("/viajes/nuevo", methods=["GET", "POST"])
 @login_required
 def nuevo_viaje():
@@ -111,9 +135,7 @@ def nuevo_viaje():
         flash("Viaje creado correctamente.", "success")
         return redirect(url_for("viajes.viajes"))
 
-    productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
-    fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
-    return render_template("form.html", viaje=None, productores=productores, fleteros=fleteros, factura_prefijo="0007-000", no_liquidar_tag=NO_LIQUIDAR_TAG)
+    return render_template("form.html", **_form_context(None))
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/editar", methods=["GET", "POST"])
@@ -147,9 +169,7 @@ def editar_viaje(viaje_id):
         flash("Viaje actualizado correctamente.", "success")
         return redirect(url_for("viajes.viajes"))
 
-    productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
-    fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
-    return render_template("form.html", viaje=viaje, productores=productores, fleteros=fleteros, factura_prefijo="0007-000", no_liquidar_tag=NO_LIQUIDAR_TAG)
+    return render_template("form.html", **_form_context(viaje))
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/eliminar", methods=["POST"])
