@@ -10,10 +10,10 @@
   </div>
   <div class="module-header-actions">
     <a href="{{ url_for('liquidaciones.orden_pago_liquidacion', liquidacion_id=liquidacion.id) }}" target="_blank" class="btn btn-sm btn-success">
-  Orden de pago
+      <i class="bi bi-printer me-1"></i> Orden de pago
     </a>
-    <a href="{{ url_for('liquidaciones.recibo_liquidacion', liquidacion_id=liquidacion.id) }}" target="_blank" class="btn btn-sm btn-dark">
-      <i class="bi bi-printer me-1"></i> Recibo / impresión
+    <a href="{{ url_for('liquidaciones.agregar_descuento_liquidacion', liquidacion_id=liquidacion.id) }}" class="btn btn-sm btn-warning">
+      <i class="bi bi-dash-circle me-1"></i> Agregar descuento
     </a>
     <a href="{{ url_for('liquidaciones.pagar_liquidacion', liquidacion_id=liquidacion.id) }}" class="btn btn-sm btn-primary">
       <i class="bi bi-cash-coin me-1"></i> Registrar pago
@@ -130,13 +130,17 @@
 </div>
 
 <div class="admin-panel mb-4">
-  <div class="admin-panel-title">Descuentos</div>
+  <div class="admin-panel-title d-flex justify-content-between align-items-center">
+    <span>Descuentos</span>
+    <a href="{{ url_for('liquidaciones.agregar_descuento_liquidacion', liquidacion_id=liquidacion.id) }}" class="btn btn-sm btn-light">Agregar</a>
+  </div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0 admin-table">
       <thead>
         <tr>
           <th>Concepto</th>
           <th class="text-end">Importe</th>
+          <th class="text-end">Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -144,10 +148,15 @@
         <tr>
           <td>{{ d.concepto }}</td>
           <td class="text-end amount-cell amount-strong">{{ d.importe|ars }}</td>
+          <td class="text-end">
+            <form method="post" action="{{ url_for('liquidaciones.eliminar_descuento_liquidacion', liquidacion_id=liquidacion.id, descuento_id=d.id) }}" onsubmit="return confirm('¿Eliminar este descuento?');" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i> Eliminar</button>
+            </form>
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="2" class="text-center py-4 text-secondary">No hay descuentos cargados.</td>
+          <td colspan="3" class="text-center py-4 text-secondary">No hay descuentos cargados.</td>
         </tr>
         {% endfor %}
       </tbody>
