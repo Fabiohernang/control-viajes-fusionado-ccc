@@ -6,11 +6,7 @@ from decimal import Decimal
 
 from extensions import db
 from models import Factura, Pago, SaldoFavor, Viaje
-from routes.helpers import (
-    login_required, actualizar_estado_factura,
-    crear_factura_y_viajes_desde_importacion,
-)
-from routes.factura_import_parsers import parse_factura_archivo
+from routes.helpers import login_required, actualizar_estado_factura
 from utils import to_decimal, quantize_money
 
 facturas_bp = Blueprint("facturas", __name__)
@@ -59,64 +55,6 @@ def facturas():
             "saldo_favor_total": saldo_favor_total,
         },
     )
-
-
-@facturas_bp.route("/facturas/importar-pdf", methods=["GET", "POST"])
-@login_required
-def importar_factura_pdf():
-    preview = session.get("factura_pdf_preview")
-
-    if request.method == "POST":
-        archivo = request.files.get("archivo_pdf")
-        if not archivo or not archivo.filename:
-            flash("Seleccioná un archivo de factura.", "warning")
-            return redirect(url_for("facturas.importar_factura_pdf"))
-
-        nombre = archivo.filename.lower()
-        if not (nombre.endswith(".pdf") or nombre.endswith(".xls") or nombre.endswith(".xlsx")):
-            flash("El archivo debe ser PDF o Excel.", "warning")
-            return redirect(url_for("facturas.importar_factura_pdf"))
-
-        try:
-            parsed = parse_factura_archivo(archivo)
-            session["factura_pdf_preview"] = parsed
-            flash("Factura leída correctamente. Revisá la vista previa antes de importar.", "success")
-        except Exception as exc:
-            session.pop("factura_pdf_preview", None)
-            flash(f"No se pudo leer la factura: {exc}", "warning")
-
-        return redirect(url_for("facturas.importar_factura_pdf"))
-
-    return render_template("factura_importar_pdf.html", preview=preview)
-
-
-@facturas_bp.route("/facturas/importar-pdf/confirmar", methods=["POST"])
-@login_required
-def confirmar_importacion_factura_pdf():
-    preview = session.get("factura_pdf_preview")
-    if not preview:
-        flash("No hay ninguna factura pendiente de importar.", "warning")
-        return redirect(url_for("facturas.importar_factura_pdf"))
-
-    accion = request.form.get("accion", "factura_y_viajes")
-    crear_viajes = accion == "factura_y_viajes"
-
-    try:
-        factura = crear_factura_y_viajes_desde_importacion(preview, crear_viajes=crear_viajes)
-        session.pop("factura_pdf_preview", None)
-        flash("Factura importada correctamente.", "success")
-        return redirect(url_for("facturas.detalle_factura", factura_id=factura.id))
-    except Exception as exc:
-        flash(f"No se pudo importar la factura: {exc}", "warning")
-        return redirect(url_for("facturas.importar_factura_pdf"))
-
-
-@facturas_bp.route("/facturas/importar-pdf/cancelar", methods=["POST"])
-@login_required
-def cancelar_importacion_factura_pdf():
-    session.pop("factura_pdf_preview", None)
-    flash("Vista previa descartada.", "success")
-    return redirect(url_for("facturas.importar_factura_pdf"))
 
 
 @facturas_bp.route("/cobranzas")
