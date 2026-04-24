@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, g
-from sqlalchemy import func
+from sqlalchemy import func, or_, text
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -9,7 +9,7 @@ from models import (
     Tarifario, Viaje,
 )
 from routes.helpers import (
-    login_required, get_config_decimal,
+    login_required, get_config_decimal, upsert_maestro,
     buscar_tarifa_por_km, parse_tarifario_text,
     hydrate_viaje, sincronizar_factura_por_numero, recalcular_liquidacion,
 )
@@ -17,6 +17,8 @@ from utils import to_decimal, quantize_money
 
 viajes_bp = Blueprint("viajes", __name__)
 
+
+@viajes_bp.route("/api/tarifa")
 @login_required
 def api_tarifa():
     km = request.args.get("km", "").strip()
@@ -34,12 +36,59 @@ def api_tarifa():
     })
 
 
+def _normalizar_ctg(value):
+    return (value or "").strip()
+
+
+def _validar_ctg_unico(ctg, viaje_id=None):
+    ctg = _normalizar_ctg(ctg)
+    if not ctg:
+        return False, "El CTG es obligatorio."
+
+    query = Viaje.query.filter(Viaje.ctg == ctg)
+    if viaje_id:
+        query = query.filter(Viaje.id != viaje_id)
+
+    if query.first():
+        return False, f"El CTG {ctg} ya está cargado en otro viaje."
+
+    return True, ""
+
+
+def _recalcular_viaje(viaje):
+    iva = get_config_decimal("iva_rate", "0.21")
+    socio_rate = get_config_decimal("socio_commission_rate", "0.06")
+    no_socio_rate = get_config_decimal("no_socio_commission_rate", "0.10")
+    matias_rate = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
+
+    viaje.recalcular(
+        iva=iva,
+        socio_rate=socio_rate,
+        no_socio_rate=no_socio_rate,
+        lucas_rate=matias_rate,
+    )
+
+    # Si el viaje queda fuera de factura, no genera comisión de Matías.
+    if not (viaje.factura or "").strip():
+        viaje.comision_lucas = Decimal("0")
+
+
 @viajes_bp.route("/viajes/nuevo", methods=["GET", "POST"])
 @login_required
 def nuevo_viaje():
     if request.method == "POST":
+        ctg = _normalizar_ctg(request.form.get("ctg"))
+        ok, mensaje = _validar_ctg_unico(ctg)
+        if not ok:
+            flash(mensaje, "warning")
+            return redirect(url_for("viajes.nuevo_viaje"))
+
         viaje = Viaje()
         hydrate_viaje(viaje, request.form)
+        _recalcular_viaje(viaje)
+
+        upsert_maestro(Productor, viaje.cliente)
+        upsert_maestro(FleteroMaster, viaje.fletero)
 
         db.session.add(viaje)
         db.session.commit()
@@ -49,11 +98,11 @@ def nuevo_viaje():
             db.session.commit()
 
         flash("Viaje creado correctamente.", "success")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("viajes.viajes"))
 
     productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
-    return render_template("form.html", viaje=None, productores=productores, fleteros=fleteros)
+    return render_template("form.html", viaje=None, productores=productores, fleteros=fleteros, factura_prefijo="0007-000")
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/editar", methods=["GET", "POST"])
@@ -62,9 +111,20 @@ def editar_viaje(viaje_id):
     viaje = Viaje.query.get_or_404(viaje_id)
 
     if request.method == "POST":
+        ctg = _normalizar_ctg(request.form.get("ctg"))
+        ok, mensaje = _validar_ctg_unico(ctg, viaje_id=viaje.id)
+        if not ok:
+            flash(mensaje, "warning")
+            return redirect(url_for("viajes.editar_viaje", viaje_id=viaje.id))
+
         factura_anterior = (viaje.factura or "").strip()
 
         hydrate_viaje(viaje, request.form)
+        _recalcular_viaje(viaje)
+
+        upsert_maestro(Productor, viaje.cliente)
+        upsert_maestro(FleteroMaster, viaje.fletero)
+
         db.session.commit()
 
         factura_nueva = (viaje.factura or "").strip()
@@ -79,11 +139,11 @@ def editar_viaje(viaje_id):
         db.session.commit()
 
         flash("Viaje actualizado correctamente.", "success")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("viajes.viajes"))
 
     productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
-    return render_template("form.html", viaje=viaje, productores=productores, fleteros=fleteros)
+    return render_template("form.html", viaje=viaje, productores=productores, fleteros=fleteros, factura_prefijo="0007-000")
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/eliminar", methods=["POST"])
@@ -100,7 +160,7 @@ def eliminar_viaje(viaje_id):
         db.session.commit()
 
     flash("Viaje eliminado.", "success")
-    return redirect(url_for("main.index"))
+    return redirect(url_for("viajes.viajes"))
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/toggle-liquidado", methods=["POST"])
@@ -112,7 +172,8 @@ def toggle_liquidado(viaje_id):
 
     estado = "liquidado" if viaje.liquidado else "pendiente"
     flash(f"Viaje marcado como {estado}.", "success")
-    return redirect(url_for("main.index"))
+    return redirect(url_for("viajes.viajes"))
+
 
 @viajes_bp.route("/viajes")
 @login_required
@@ -145,12 +206,14 @@ def viajes():
     total_viajes = len(viajes)
     total_importe = quantize_money(sum((to_decimal(v.total_importe) for v in viajes), Decimal("0")))
     pendientes_liquidar = sum(1 for v in viajes if not v.liquidado)
+    sin_factura = sum(1 for v in viajes if not (v.factura or "").strip())
 
     stats = {
         "total_viajes": total_viajes,
         "total_importe": total_importe,
         "pendientes_liquidar": pendientes_liquidar,
         "ctg_repetidos": len(ctg_repetidos),
+        "sin_factura": sin_factura,
     }
 
     return render_template(
@@ -161,6 +224,7 @@ def viajes():
         ctg_repetidos=ctg_repetidos,
     )
 
+
 @viajes_bp.route("/configuracion", methods=["GET", "POST"])
 @login_required
 def configuracion():
@@ -169,9 +233,13 @@ def configuracion():
             "iva_rate",
             "socio_commission_rate",
             "no_socio_commission_rate",
+            "matias_commission_rate",
             "lucas_commission_rate",
         ]:
             value = request.form.get(key, "").strip() or "0"
+            # mantenemos lucas como compatibilidad vieja, pero Matías es el nombre nuevo
+            if key == "lucas_commission_rate" and not request.form.get("lucas_commission_rate"):
+                continue
             item = db.session.get(AppConfig, key)
             if item:
                 item.value = value
@@ -181,11 +249,12 @@ def configuracion():
         flash("Configuración guardada.", "success")
         return redirect(url_for("viajes.configuracion"))
 
+    matias_default = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
     config = {
         "iva_rate": str(get_config_decimal("iva_rate", "0.21")),
         "socio_commission_rate": str(get_config_decimal("socio_commission_rate", "0.06")),
         "no_socio_commission_rate": str(get_config_decimal("no_socio_commission_rate", "0.10")),
-        "lucas_commission_rate": str(get_config_decimal("lucas_commission_rate", "0.015")),
+        "matias_commission_rate": str(matias_default),
     }
     return render_template("configuracion.html", config=config)
 
@@ -215,7 +284,7 @@ def recalcular_todo():
     iva = get_config_decimal("iva_rate", "0.21")
     socio_rate = get_config_decimal("socio_commission_rate", "0.06")
     no_socio_rate = get_config_decimal("no_socio_commission_rate", "0.10")
-    lucas_rate = get_config_decimal("lucas_commission_rate", "0.015")
+    matias_rate = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
 
     viajes = Viaje.query.all()
     facturas_afectadas = set()
@@ -225,8 +294,10 @@ def recalcular_todo():
             iva=iva,
             socio_rate=socio_rate,
             no_socio_rate=no_socio_rate,
-            lucas_rate=lucas_rate,
+            lucas_rate=matias_rate,
         )
+        if not (viaje.factura or "").strip():
+            viaje.comision_lucas = Decimal("0")
         if viaje.factura:
             facturas_afectadas.add(viaje.factura.strip())
 
