@@ -75,14 +75,6 @@ def _guardar_items_y_descuentos(liquidacion, form):
                 LiquidacionDescuento(concepto=concepto, importe=quantize_money(importe))
             )
 
-    for concepto, importe_raw in zip(form.getlist("descuento_concepto[]"), form.getlist("descuento_importe[]")):
-        concepto = (concepto or "").strip()
-        importe = to_decimal(importe_raw, "0")
-        if concepto and importe > 0:
-            liquidacion.descuentos.append(
-                LiquidacionDescuento(concepto=concepto, importe=quantize_money(importe))
-            )
-
     recalcular_liquidacion(liquidacion)
 
 
@@ -154,12 +146,7 @@ def nueva_liquidacion():
             flash("Tenés que indicar el fletero.", "warning")
             return redirect(url_for("liquidaciones.nueva_liquidacion"))
 
-        liquidacion = LiquidacionFletero(
-            fecha=fecha_liq,
-            fletero=fletero,
-            factura_fletero=factura_fletero,
-            observaciones=observaciones,
-        )
+        liquidacion = LiquidacionFletero(fecha=fecha_liq, fletero=fletero, factura_fletero=factura_fletero, observaciones=observaciones)
         db.session.add(liquidacion)
         db.session.flush()
         _guardar_items_y_descuentos(liquidacion, request.form)
@@ -212,6 +199,15 @@ def detalle_liquidacion(liquidacion_id):
     recalcular_liquidacion(liquidacion)
     db.session.commit()
     return render_template("liquidacion_detalle.html", liquidacion=liquidacion)
+
+
+@liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/orden-pago")
+@login_required
+def orden_pago_liquidacion(liquidacion_id):
+    liquidacion = LiquidacionFletero.query.get_or_404(liquidacion_id)
+    recalcular_liquidacion(liquidacion)
+    db.session.commit()
+    return render_template("liquidacion_orden_pago.html", liquidacion=liquidacion)
 
 
 @liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/pago", methods=["GET", "POST"])
