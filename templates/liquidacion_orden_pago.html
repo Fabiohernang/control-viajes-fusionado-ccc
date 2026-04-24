@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Orden de pago</title>
+<style>
+body{font-family:Arial,sans-serif;margin:28px;color:#222;background:white}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #8c6b3f;padding-bottom:12px;margin-bottom:18px}
+.logo{width:90px;height:auto}.brand{display:flex;gap:12px;align-items:center}.name{font-weight:bold;font-size:15px}.muted{font-size:12px;color:#666}
+h1{margin:0;color:#5a4528;font-size:24px}.box{border:1px solid #ddd;background:#faf7f0;padding:10px;margin:8px 0;border-radius:6px}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}th,td{border:1px solid #ccc;padding:6px}th{background:#8c6b3f;color:white}.right{text-align:right}.totals{width:360px;margin-left:auto;margin-top:18px}.total-row{display:flex;justify-content:space-between;border:1px solid #ccc;border-bottom:0;padding:8px}.total-row:last-child{border-bottom:1px solid #ccc;background:#5a4528;color:white;font-weight:bold}.actions{margin-bottom:14px}.btn{padding:8px 12px;background:#8c6b3f;color:white;text-decoration:none;border-radius:6px}.print-note{font-size:12px;color:#666;margin-left:8px}@media print{.actions{display:none}body{margin:12px}}
+</style>
+</head>
+<body>
+<div class="actions"><a class="btn" href="javascript:window.print()">Imprimir / guardar PDF</a><span class="print-note">También podés usar Ctrl+P</span></div>
+<div class="header">
+  <div class="brand">
+    <img class="logo" src="{{ url_for('static', filename='logo-cooperativa.PNG') }}" alt="Logo">
+    <div><div class="name">Coop. Prov. Cons y Cred Transporte Automotor Ltda.</div><div class="muted">CUIT: 30-53034113-1</div></div>
+  </div>
+  <div><h1>Orden de Pago</h1><div>Liquidación N° {{ liquidacion.id }}</div><div>Fecha: {{ liquidacion.fecha.strftime('%d/%m/%Y') }}</div></div>
+</div>
+<div class="box"><b>Fletero:</b> {{ liquidacion.fletero }} &nbsp; | &nbsp; <b>Factura fletero:</b> {{ liquidacion.factura_fletero or '-' }} &nbsp; | &nbsp; <b>Estado:</b> {{ liquidacion.estado|capitalize }}</div>
+<h3>Viajes incluidos</h3>
+<table>
+<thead><tr><th>Fecha</th><th>CTG</th><th>Cliente</th><th>Origen</th><th>Destino</th><th class="right">Kg</th><th class="right">Km</th><th class="right">Tarifa</th><th class="right">Total + IVA</th></tr></thead>
+<tbody>
+{% for item in liquidacion.items %}
+<tr><td>{{ item.viaje.fecha.strftime('%d/%m/%Y') }}</td><td>{{ item.viaje.ctg or '-' }}</td><td>{{ item.viaje.cliente }}</td><td>{{ item.viaje.origen or '-' }}</td><td>{{ item.viaje.destino or '-' }}</td><td class="right">{{ item.viaje.kg }}</td><td class="right">{{ item.viaje.kilometros or '-' }}</td><td class="right">{{ item.viaje.tarifa|ars }}</td><td class="right">{{ item.importe|ars }}</td></tr>
+{% else %}
+<tr><td colspan="9">No hay viajes incluidos.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+<h3>Descuentos / retenciones</h3>
+<table>
+<thead><tr><th>Concepto</th><th class="right">Importe</th></tr></thead>
+<tbody>{% for d in liquidacion.descuentos %}<tr><td>{{ d.concepto }}</td><td class="right">{{ d.importe|ars }}</td></tr>{% else %}<tr><td colspan="2">Sin descuentos.</td></tr>{% endfor %}</tbody>
+</table>
+<div class="totals"><div class="total-row"><span>Total bruto</span><span>{{ liquidacion.total_bruto|ars }}</span></div><div class="total-row"><span>Descuentos / retenciones</span><span>{{ liquidacion.total_descuentos|ars }}</span></div><div class="total-row"><span>Total pagado</span><span>{{ liquidacion.total_pagado|ars }}</span></div><div class="total-row"><span>Neto a pagar</span><span>{{ liquidacion.neto_pagar|ars }}</span></div></div>
+</body>
+</html>
