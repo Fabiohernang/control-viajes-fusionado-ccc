@@ -24,12 +24,7 @@ def _es_liquidable(viaje):
 
 
 def _stats_liquidaciones(items):
-    return {
-        "total_bruto": quantize_money(sum((to_decimal(x.total_bruto) for x in items), Decimal("0"))),
-        "total_descuentos": quantize_money(sum((to_decimal(x.total_descuentos) for x in items), Decimal("0"))),
-        "total_neto": quantize_money(sum((to_decimal(x.neto_pagar) for x in items), Decimal("0"))),
-        "cantidad": len(items),
-    }
+    return {"total_bruto": quantize_money(sum((to_decimal(x.total_bruto) for x in items), Decimal("0"))), "total_descuentos": quantize_money(sum((to_decimal(x.total_descuentos) for x in items), Decimal("0"))), "total_neto": quantize_money(sum((to_decimal(x.neto_pagar) for x in items), Decimal("0"))), "cantidad": len(items)}
 
 
 def _viajes_disponibles(liquidacion=None):
@@ -53,7 +48,6 @@ def _guardar_items(liquidacion, form):
             item.viaje.liquidado = False
     liquidacion.items.clear()
     db.session.flush()
-
     for raw_id in form.getlist("viaje_ids"):
         if not raw_id:
             continue
@@ -92,7 +86,8 @@ def buscar_pagos_fleteros():
     try:
         return render_template("buscar_pagos_fleteros.html", items=items, stats=stats, q=q, medio="", fecha_desde="", fecha_hasta="")
     except Exception:
-        return render_template("liquidaciones.html", items=LiquidacionFletero.query.order_by(LiquidacionFletero.fecha.desc()).all(), q="", stats=_stats_liquidaciones(LiquidacionFletero.query.all()))
+        all_items = LiquidacionFletero.query.order_by(LiquidacionFletero.fecha.desc()).all()
+        return render_template("liquidaciones.html", items=all_items, q="", stats=_stats_liquidaciones(all_items))
 
 
 @liquidaciones_bp.route("/liquidaciones/nueva", methods=["GET", "POST"])
@@ -103,19 +98,13 @@ def nueva_liquidacion():
         if not fletero:
             flash("Tenés que indicar el fletero.", "warning")
             return redirect(url_for("liquidaciones.nueva_liquidacion"))
-        liq = LiquidacionFletero(
-            fletero=fletero,
-            fecha=_parse_fecha(request.form.get("fecha")),
-            factura_fletero=(request.form.get("factura_fletero") or "").strip() or None,
-            observaciones=(request.form.get("observaciones") or "").strip() or None,
-        )
+        liq = LiquidacionFletero(fletero=fletero, fecha=_parse_fecha(request.form.get("fecha")), factura_fletero=(request.form.get("factura_fletero") or "").strip() or None, observaciones=(request.form.get("observaciones") or "").strip() or None)
         db.session.add(liq)
         db.session.flush()
         _guardar_items(liq, request.form)
         db.session.commit()
         flash("Liquidación creada correctamente.", "success")
         return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liq.id))
-
     viajes = _viajes_disponibles()
     fleteros = sorted(set([v.fletero for v in Viaje.query.all() if v.fletero]))
     return render_template("liquidacion_form.html", viajes=viajes, fleteros=fleteros, liquidacion=None)
@@ -176,6 +165,47 @@ def recibo_liquidacion(liquidacion_id):
     return redirect(url_for("liquidaciones.orden_pago_liquidacion", liquidacion_id=liquidacion_id))
 
 
+@liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/descuento", methods=["GET", "POST"])
+@login_required
+def agregar_descuento_liquidacion(liquidacion_id):
+    liq = LiquidacionFletero.query.get_or_404(liquidacion_id)
+    categorias = ["Adelanto", "Combustible", "Percepciones", "Cuota", "Seguros", "Otro"]
+    if request.method == "POST":
+        categoria = (request.form.get("categoria") or "").strip()
+        otro = (request.form.get("otro_concepto") or "").strip()
+        concepto = otro if categoria == "Otro" and otro else categoria
+        importe = to_decimal(request.form.get("importe", "0"))
+        if not concepto or importe <= 0:
+            flash("Completá concepto e importe del descuento.", "warning")
+            return redirect(url_for("liquidaciones.agregar_descuento_liquidacion", liquidacion_id=liq.id))
+        obs = (request.form.get("observaciones") or "").strip()
+        if obs:
+            concepto = f"{concepto} - {obs}"
+        db.session.add(LiquidacionDescuento(liquidacion_id=liq.id, concepto=concepto, importe=quantize_money(importe)))
+        db.session.flush()
+        recalcular_liquidacion(liq)
+        db.session.commit()
+        flash("Descuento agregado.", "success")
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liq.id))
+    return render_template("liquidacion_descuento_form.html", liquidacion=liq, categorias=categorias)
+
+
+@liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/descuento/<int:descuento_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_descuento_liquidacion(liquidacion_id, descuento_id):
+    liq = LiquidacionFletero.query.get_or_404(liquidacion_id)
+    descuento = LiquidacionDescuento.query.get_or_404(descuento_id)
+    if descuento.liquidacion_id != liq.id:
+        flash("El descuento no corresponde a esta liquidación.", "warning")
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liq.id))
+    db.session.delete(descuento)
+    db.session.flush()
+    recalcular_liquidacion(liq)
+    db.session.commit()
+    flash("Descuento eliminado.", "success")
+    return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liq.id))
+
+
 @liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/pago", methods=["GET", "POST"])
 @login_required
 def pagar_liquidacion(liquidacion_id):
@@ -186,14 +216,7 @@ def pagar_liquidacion(liquidacion_id):
         if importe <= 0 or not medio:
             flash("Completá medio e importe.", "warning")
             return redirect(url_for("liquidaciones.pagar_liquidacion", liquidacion_id=liq.id))
-        db.session.add(LiquidacionPago(
-            liquidacion_id=liq.id,
-            fecha=_parse_fecha(request.form.get("fecha")),
-            medio=medio,
-            numero=(request.form.get("numero") or "").strip() or None,
-            importe=quantize_money(importe),
-            observaciones=(request.form.get("observaciones") or "").strip() or None,
-        ))
+        db.session.add(LiquidacionPago(liquidacion_id=liq.id, fecha=_parse_fecha(request.form.get("fecha")), medio=medio, numero=(request.form.get("numero") or "").strip() or None, importe=quantize_money(importe), observaciones=(request.form.get("observaciones") or "").strip() or None))
         db.session.flush()
         recalcular_liquidacion(liq)
         db.session.commit()
