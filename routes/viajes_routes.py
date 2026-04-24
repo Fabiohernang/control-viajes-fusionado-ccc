@@ -16,6 +16,7 @@ from routes.helpers import (
 from utils import to_decimal, quantize_money
 
 viajes_bp = Blueprint("viajes", __name__)
+NO_LIQUIDAR_TAG = "[NO_LIQUIDAR]"
 
 
 @viajes_bp.route("/api/tarifa")
@@ -30,10 +31,7 @@ def api_tarifa():
     if not match:
         return jsonify({"tarifa": None})
 
-    return jsonify({
-        "tarifa": float(match.tarifa_tn),
-        "km_encontrado": match.km,
-    })
+    return jsonify({"tarifa": float(match.tarifa_tn), "km_encontrado": match.km})
 
 
 def _normalizar_ctg(value):
@@ -55,20 +53,32 @@ def _validar_ctg_unico(ctg, viaje_id=None):
     return True, ""
 
 
+def _es_liquidable(viaje):
+    return NO_LIQUIDAR_TAG not in (viaje.observaciones or "")
+
+
+def _aplicar_marca_liquidable(viaje, form):
+    liquidable = form.get("liquidable_fletero", "si") == "si"
+    obs = (viaje.observaciones or "").replace(NO_LIQUIDAR_TAG, "").strip()
+
+    if not liquidable:
+        obs = f"{NO_LIQUIDAR_TAG} {obs}".strip()
+        viaje.liquidado = True
+    else:
+        if viaje.liquidado and NO_LIQUIDAR_TAG in (viaje.observaciones or ""):
+            viaje.liquidado = False
+
+    viaje.observaciones = obs or None
+
+
 def _recalcular_viaje(viaje):
     iva = get_config_decimal("iva_rate", "0.21")
     socio_rate = get_config_decimal("socio_commission_rate", "0.06")
     no_socio_rate = get_config_decimal("no_socio_commission_rate", "0.10")
     matias_rate = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
 
-    viaje.recalcular(
-        iva=iva,
-        socio_rate=socio_rate,
-        no_socio_rate=no_socio_rate,
-        lucas_rate=matias_rate,
-    )
+    viaje.recalcular(iva=iva, socio_rate=socio_rate, no_socio_rate=no_socio_rate, lucas_rate=matias_rate)
 
-    # Si el viaje queda fuera de factura, no genera comisión de Matías.
     if not (viaje.factura or "").strip():
         viaje.comision_lucas = Decimal("0")
 
@@ -85,6 +95,7 @@ def nuevo_viaje():
 
         viaje = Viaje()
         hydrate_viaje(viaje, request.form)
+        _aplicar_marca_liquidable(viaje, request.form)
         _recalcular_viaje(viaje)
 
         upsert_maestro(Productor, viaje.cliente)
@@ -102,7 +113,7 @@ def nuevo_viaje():
 
     productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
-    return render_template("form.html", viaje=None, productores=productores, fleteros=fleteros, factura_prefijo="0007-000")
+    return render_template("form.html", viaje=None, productores=productores, fleteros=fleteros, factura_prefijo="0007-000", no_liquidar_tag=NO_LIQUIDAR_TAG)
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/editar", methods=["GET", "POST"])
@@ -118,24 +129,19 @@ def editar_viaje(viaje_id):
             return redirect(url_for("viajes.editar_viaje", viaje_id=viaje.id))
 
         factura_anterior = (viaje.factura or "").strip()
-
         hydrate_viaje(viaje, request.form)
+        _aplicar_marca_liquidable(viaje, request.form)
         _recalcular_viaje(viaje)
 
         upsert_maestro(Productor, viaje.cliente)
         upsert_maestro(FleteroMaster, viaje.fletero)
-
         db.session.commit()
 
         factura_nueva = (viaje.factura or "").strip()
-
         if factura_anterior:
             sincronizar_factura_por_numero(factura_anterior)
-        if factura_nueva and factura_nueva != factura_anterior:
+        if factura_nueva:
             sincronizar_factura_por_numero(factura_nueva)
-        elif factura_nueva:
-            sincronizar_factura_por_numero(factura_nueva)
-
         db.session.commit()
 
         flash("Viaje actualizado correctamente.", "success")
@@ -143,7 +149,7 @@ def editar_viaje(viaje_id):
 
     productores = [p.nombre for p in Productor.query.order_by(Productor.nombre.asc()).all()]
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
-    return render_template("form.html", viaje=viaje, productores=productores, fleteros=fleteros, factura_prefijo="0007-000")
+    return render_template("form.html", viaje=viaje, productores=productores, fleteros=fleteros, factura_prefijo="0007-000", no_liquidar_tag=NO_LIQUIDAR_TAG)
 
 
 @viajes_bp.route("/viajes/<int:viaje_id>/eliminar", methods=["POST"])
@@ -151,14 +157,11 @@ def editar_viaje(viaje_id):
 def eliminar_viaje(viaje_id):
     viaje = Viaje.query.get_or_404(viaje_id)
     factura_numero = (viaje.factura or "").strip()
-
     db.session.delete(viaje)
     db.session.commit()
-
     if factura_numero:
         sincronizar_factura_por_numero(factura_numero)
         db.session.commit()
-
     flash("Viaje eliminado.", "success")
     return redirect(url_for("viajes.viajes"))
 
@@ -167,9 +170,11 @@ def eliminar_viaje(viaje_id):
 @login_required
 def toggle_liquidado(viaje_id):
     viaje = Viaje.query.get_or_404(viaje_id)
+    if not _es_liquidable(viaje):
+        flash("Este viaje está marcado como no liquidable al fletero.", "warning")
+        return redirect(url_for("viajes.viajes"))
     viaje.liquidado = not viaje.liquidado
     db.session.commit()
-
     estado = "liquidado" if viaje.liquidado else "pendiente"
     flash(f"Viaje marcado como {estado}.", "success")
     return redirect(url_for("viajes.viajes"))
@@ -179,65 +184,34 @@ def toggle_liquidado(viaje_id):
 @login_required
 def viajes():
     q = request.args.get("q", "").strip()
-
     query = Viaje.query
-
     if q:
         like = f"%{q}%"
-        query = query.filter(
-            or_(
-                Viaje.cliente.ilike(like),
-                Viaje.fletero.ilike(like),
-                Viaje.ctg.ilike(like),
-                Viaje.factura.ilike(like),
-                Viaje.producto.ilike(like),
-            )
-        )
+        query = query.filter(or_(Viaje.cliente.ilike(like), Viaje.fletero.ilike(like), Viaje.ctg.ilike(like), Viaje.factura.ilike(like), Viaje.producto.ilike(like)))
 
     viajes = query.order_by(Viaje.fecha.desc(), Viaje.id.desc()).all()
-
     ctg_counts = {}
     for v in viajes:
         if v.ctg:
             ctg_counts[v.ctg] = ctg_counts.get(v.ctg, 0) + 1
-
     ctg_repetidos = {k for k, cantidad in ctg_counts.items() if cantidad > 1}
 
     total_viajes = len(viajes)
     total_importe = quantize_money(sum((to_decimal(v.total_importe) for v in viajes), Decimal("0")))
-    pendientes_liquidar = sum(1 for v in viajes if not v.liquidado)
+    pendientes_liquidar = sum(1 for v in viajes if not v.liquidado and _es_liquidable(v))
     sin_factura = sum(1 for v in viajes if not (v.factura or "").strip())
+    no_liquidables = sum(1 for v in viajes if not _es_liquidable(v))
 
-    stats = {
-        "total_viajes": total_viajes,
-        "total_importe": total_importe,
-        "pendientes_liquidar": pendientes_liquidar,
-        "ctg_repetidos": len(ctg_repetidos),
-        "sin_factura": sin_factura,
-    }
-
-    return render_template(
-        "viajes.html",
-        viajes=viajes,
-        q=q,
-        stats=stats,
-        ctg_repetidos=ctg_repetidos,
-    )
+    stats = {"total_viajes": total_viajes, "total_importe": total_importe, "pendientes_liquidar": pendientes_liquidar, "ctg_repetidos": len(ctg_repetidos), "sin_factura": sin_factura, "no_liquidables": no_liquidables}
+    return render_template("viajes.html", viajes=viajes, q=q, stats=stats, ctg_repetidos=ctg_repetidos, no_liquidar_tag=NO_LIQUIDAR_TAG)
 
 
 @viajes_bp.route("/configuracion", methods=["GET", "POST"])
 @login_required
 def configuracion():
     if request.method == "POST":
-        for key in [
-            "iva_rate",
-            "socio_commission_rate",
-            "no_socio_commission_rate",
-            "matias_commission_rate",
-            "lucas_commission_rate",
-        ]:
+        for key in ["iva_rate", "socio_commission_rate", "no_socio_commission_rate", "matias_commission_rate", "lucas_commission_rate"]:
             value = request.form.get(key, "").strip() or "0"
-            # mantenemos lucas como compatibilidad vieja, pero Matías es el nombre nuevo
             if key == "lucas_commission_rate" and not request.form.get("lucas_commission_rate"):
                 continue
             item = db.session.get(AppConfig, key)
@@ -250,12 +224,7 @@ def configuracion():
         return redirect(url_for("viajes.configuracion"))
 
     matias_default = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
-    config = {
-        "iva_rate": str(get_config_decimal("iva_rate", "0.21")),
-        "socio_commission_rate": str(get_config_decimal("socio_commission_rate", "0.06")),
-        "no_socio_commission_rate": str(get_config_decimal("no_socio_commission_rate", "0.10")),
-        "matias_commission_rate": str(matias_default),
-    }
+    config = {"iva_rate": str(get_config_decimal("iva_rate", "0.21")), "socio_commission_rate": str(get_config_decimal("socio_commission_rate", "0.06")), "no_socio_commission_rate": str(get_config_decimal("no_socio_commission_rate", "0.10")), "matias_commission_rate": str(matias_default)}
     return render_template("configuracion.html", config=config)
 
 
@@ -266,7 +235,6 @@ def resetear_datos_operativos():
     if password != "BORRAR2026":
         flash("Contraseña incorrecta para borrar datos.", "warning")
         return redirect(url_for("viajes.configuracion"))
-
     try:
         with db.session.begin():
             db.session.execute(text("TRUNCATE TABLE pago_aplicaciones, saldos_favor, liquidacion_items, liquidacion_descuentos, liquidacion_pagos, liquidaciones_fletero, facturas, pagos, viajes, caja_movimientos, cuotas_seguros RESTART IDENTITY CASCADE"))
@@ -274,7 +242,6 @@ def resetear_datos_operativos():
     except Exception as exc:
         db.session.rollback()
         flash(f"No se pudieron borrar los datos: {exc}", "warning")
-
     return redirect(url_for("viajes.configuracion"))
 
 
@@ -285,35 +252,21 @@ def recalcular_todo():
     socio_rate = get_config_decimal("socio_commission_rate", "0.06")
     no_socio_rate = get_config_decimal("no_socio_commission_rate", "0.10")
     matias_rate = get_config_decimal("matias_commission_rate", get_config_decimal("lucas_commission_rate", "0.015"))
-
     viajes = Viaje.query.all()
     facturas_afectadas = set()
-
     for viaje in viajes:
-        viaje.recalcular(
-            iva=iva,
-            socio_rate=socio_rate,
-            no_socio_rate=no_socio_rate,
-            lucas_rate=matias_rate,
-        )
+        viaje.recalcular(iva=iva, socio_rate=socio_rate, no_socio_rate=no_socio_rate, lucas_rate=matias_rate)
         if not (viaje.factura or "").strip():
             viaje.comision_lucas = Decimal("0")
         if viaje.factura:
             facturas_afectadas.add(viaje.factura.strip())
-
     db.session.commit()
-
     for numero in facturas_afectadas:
         sincronizar_factura_por_numero(numero)
-
     db.session.commit()
-
-    liquidaciones_existentes = LiquidacionFletero.query.all()
-    for liq in liquidaciones_existentes:
+    for liq in LiquidacionFletero.query.all():
         recalcular_liquidacion(liq)
-
     db.session.commit()
-
     flash("Se recalcularon todos los viajes y liquidaciones con la configuración actual.", "success")
     return redirect(url_for("main.index"))
 
@@ -323,19 +276,15 @@ def recalcular_todo():
 def tarifario():
     if request.method == "POST":
         accion = request.form.get("accion", "").strip()
-
         if accion == "pegar":
             texto = request.form.get("tarifario_texto", "").strip()
             registros, errores = parse_tarifario_text(texto)
-
             if errores:
                 for error in errores[:10]:
                     flash(error, "warning")
                 return redirect(url_for("viajes.tarifario"))
-
             cargados = 0
             actualizados = 0
-
             for km, tarifa in registros:
                 existente = Tarifario.query.filter_by(km=km).first()
                 if existente:
@@ -344,18 +293,14 @@ def tarifario():
                 else:
                     db.session.add(Tarifario(km=km, tarifa_tn=quantize_money(tarifa)))
                     cargados += 1
-
             db.session.commit()
             flash(f"Tarifario procesado. Nuevos: {cargados}. Actualizados: {actualizados}.", "success")
             return redirect(url_for("viajes.tarifario"))
-
         elif accion == "vaciar":
             Tarifario.query.delete()
             db.session.commit()
             flash("Se eliminó todo el tarifario.", "success")
             return redirect(url_for("viajes.tarifario"))
-
     items = Tarifario.query.order_by(Tarifario.km.asc()).limit(1000).all()
     total_items = Tarifario.query.count()
-
     return render_template("tarifario.html", items=items, total_items=total_items)
