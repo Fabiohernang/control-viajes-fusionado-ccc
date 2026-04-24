@@ -4,7 +4,7 @@
 {% block content %}
 <div class="mb-4">
   <h1 class="h3 mb-1">Configuración</h1>
-  <p class="text-secondary mb-0">Acá definís los porcentajes. Nada de andar buscando fórmulas escondidas en una celda perdida.</p>
+  <p class="text-secondary mb-0">Acá definís los porcentajes del sistema. Si cambian, los ajustás acá y listo.</p>
 </div>
 
 <div class="card shadow-sm">
@@ -26,8 +26,8 @@
         <div class="form-text">Ej: 0.10 = 10%</div>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Comisión Lucas</label>
-        <input class="form-control" type="number" step="0.0001" name="lucas_commission_rate" value="{{ config.lucas_commission_rate }}">
+        <label class="form-label">Comisión Matías</label>
+        <input class="form-control" type="number" step="0.0001" name="matias_commission_rate" value="{{ config.matias_commission_rate }}">
         <div class="form-text">Ej: 0.015 = 1.5%</div>
       </div>
 
