@@ -9,10 +9,81 @@ from models import (
     LiquidacionItem, LiquidacionPago, Viaje,
 )
 from routes.helpers import login_required, recalcular_liquidacion
-from routes.import_parsers import parse_liquidacion_archivo
 from utils import to_decimal, quantize_money
 
 liquidaciones_bp = Blueprint("liquidaciones", __name__)
+NO_LIQUIDAR_TAG = "[NO_LIQUIDAR]"
+
+
+def _es_liquidable(viaje):
+    return NO_LIQUIDAR_TAG not in (viaje.observaciones or "")
+
+
+def _viajes_disponibles(liquidacion=None):
+    seleccionados = set()
+    if liquidacion:
+        seleccionados = {item.viaje_id for item in liquidacion.items}
+
+    viajes = Viaje.query.order_by(Viaje.fecha.desc(), Viaje.id.desc()).all()
+    disponibles = []
+    for viaje in viajes:
+        if not _es_liquidable(viaje):
+            continue
+        if viaje.liquidado and viaje.id not in seleccionados:
+            continue
+        disponibles.append(viaje)
+    return disponibles
+
+
+def _guardar_items_y_descuentos(liquidacion, form):
+    prev_items = list(liquidacion.items)
+    for item in prev_items:
+        if item.viaje:
+            item.viaje.liquidado = False
+
+    liquidacion.items.clear()
+    liquidacion.descuentos.clear()
+    db.session.flush()
+
+    viaje_ids = [int(x) for x in form.getlist("viaje_ids") if str(x).strip()]
+    for viaje_id in viaje_ids:
+        viaje = db.session.get(Viaje, viaje_id)
+        if not viaje or not _es_liquidable(viaje):
+            continue
+        if viaje.fletero.strip().lower() != liquidacion.fletero.strip().lower():
+            continue
+        viaje.liquidado = True
+        liquidacion.items.append(
+            LiquidacionItem(
+                viaje_id=viaje.id,
+                importe=quantize_money(to_decimal(viaje.importe_con_iva)),
+            )
+        )
+
+    conceptos_fijos = [
+        ("Comisión", form.get("comision_manual", "0")),
+        ("Combustible", form.get("combustible", "0")),
+        ("Retención IIBB", form.get("retencion_iibb", "0")),
+        ("Percepciones factura comisión", form.get("percepciones_comision", "0")),
+        ("Otros descuentos", form.get("otros_descuentos", "0")),
+    ]
+
+    for concepto, importe_raw in conceptos_fijos:
+        importe = to_decimal(importe_raw, "0")
+        if importe > 0:
+            liquidacion.descuentos.append(
+                LiquidacionDescuento(concepto=concepto, importe=quantize_money(importe))
+            )
+
+    for concepto, importe_raw in zip(form.getlist("descuento_concepto[]"), form.getlist("descuento_importe[]")):
+        concepto = (concepto or "").strip()
+        importe = to_decimal(importe_raw, "0")
+        if concepto and importe > 0:
+            liquidacion.descuentos.append(
+                LiquidacionDescuento(concepto=concepto, importe=quantize_money(importe))
+            )
+
+    recalcular_liquidacion(liquidacion)
 
 
 @liquidaciones_bp.route("/liquidaciones")
@@ -33,38 +104,6 @@ def liquidaciones():
         "cantidad": len(items),
     }
     return render_template("liquidaciones.html", items=items, q=q, stats=stats)
-
-
-@liquidaciones_bp.route("/importar_liquidacion_pdf", methods=["GET", "POST"])
-@login_required
-def importar_liquidacion_pdf():
-    if request.method == "POST":
-        archivo = request.files.get("archivo")
-        if not archivo or not archivo.filename:
-            flash("Seleccioná un archivo de liquidación.", "warning")
-            return redirect(url_for("liquidaciones.importar_liquidacion_pdf"))
-
-        nombre = archivo.filename.lower()
-        if not (nombre.endswith(".pdf") or nombre.endswith(".xls") or nombre.endswith(".xlsx")):
-            flash("Formato no soportado. Subí Excel 8 (.xls/.xlsx) o PDF.", "warning")
-            return redirect(url_for("liquidaciones.importar_liquidacion_pdf"))
-
-        try:
-            data = parse_liquidacion_archivo(archivo)
-            resultados = []
-            for item in data.get("items", []):
-                ctg = str(item.get("ctg") or "").strip()
-                coincidencias = Viaje.query.filter_by(ctg=ctg).all() if ctg else []
-                resultados.append({"item": item, "coincidencias": coincidencias, "cantidad": len(coincidencias)})
-            tipo = "Excel" if nombre.endswith(".xls") or nombre.endswith(".xlsx") else "PDF"
-            flash(f"{tipo} procesado correctamente", "success")
-            return render_template("liquidacion_preview.html", data=data, resultados=resultados)
-        except Exception as e:
-            print("ERROR importar_liquidacion_archivo:", e)
-            flash(f"Error procesando archivo: {e}", "danger")
-            return redirect(url_for("liquidaciones.importar_liquidacion_pdf"))
-
-    return render_template("importar_liquidacion_pdf.html")
 
 
 @liquidaciones_bp.route("/liquidaciones/buscar-pagos")
@@ -102,21 +141,34 @@ def buscar_pagos_fleteros():
 @login_required
 def nueva_liquidacion():
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
+    viajes = _viajes_disponibles()
+
     if request.method == "POST":
         fecha_raw = request.form.get("fecha", "")
         fecha_liq = datetime.strptime(fecha_raw, "%Y-%m-%d").date() if fecha_raw else date.today()
         fletero = request.form.get("fletero", "").strip()
         factura_fletero = request.form.get("factura_fletero", "").strip() or None
         observaciones = request.form.get("observaciones", "").strip() or None
+
         if not fletero:
             flash("Tenés que indicar el fletero.", "warning")
             return redirect(url_for("liquidaciones.nueva_liquidacion"))
-        liquidacion = LiquidacionFletero(fecha=fecha_liq, fletero=fletero, factura_fletero=factura_fletero, observaciones=observaciones)
+
+        liquidacion = LiquidacionFletero(
+            fecha=fecha_liq,
+            fletero=fletero,
+            factura_fletero=factura_fletero,
+            observaciones=observaciones,
+        )
         db.session.add(liquidacion)
+        db.session.flush()
+        _guardar_items_y_descuentos(liquidacion, request.form)
         db.session.commit()
-        flash("Liquidación creada correctamente", "success")
-        return redirect(url_for("liquidaciones.liquidaciones"))
-    return render_template("liquidacion_form.html", fleteros=fleteros)
+
+        flash("Liquidación creada correctamente.", "success")
+        return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
+
+    return render_template("liquidacion_form.html", fleteros=fleteros, viajes=viajes, liquidacion=None)
 
 
 @liquidaciones_bp.route("/liquidaciones/<int:liquidacion_id>/editar", methods=["GET", "POST"])
@@ -124,28 +176,19 @@ def nueva_liquidacion():
 def editar_liquidacion(liquidacion_id):
     liquidacion = LiquidacionFletero.query.get_or_404(liquidacion_id)
     fleteros = [f.nombre for f in FleteroMaster.query.order_by(FleteroMaster.nombre.asc()).all()]
+
     if request.method == "POST":
         liquidacion.fecha = datetime.strptime(request.form.get("fecha"), "%Y-%m-%d").date()
         liquidacion.fletero = request.form.get("fletero", "").strip()
         liquidacion.factura_fletero = request.form.get("factura_fletero", "").strip() or None
         liquidacion.observaciones = request.form.get("observaciones", "").strip() or None
-        liquidacion.items.clear()
-        liquidacion.descuentos.clear()
-        viaje_ids = [int(x) for x in request.form.getlist("viaje_ids") if str(x).strip()]
-        for viaje_id in viaje_ids:
-            viaje = db.session.get(Viaje, viaje_id)
-            if viaje:
-                liquidacion.items.append(LiquidacionItem(viaje_id=viaje.id, importe=quantize_money(to_decimal(viaje.total_importe))))
-        for concepto, importe_desc in zip(request.form.getlist("descuento_concepto[]"), request.form.getlist("descuento_importe[]")):
-            concepto = (concepto or "").strip()
-            importe_dec = to_decimal(importe_desc, "0")
-            if concepto and importe_dec > 0:
-                liquidacion.descuentos.append(LiquidacionDescuento(concepto=concepto, importe=quantize_money(importe_dec)))
-        recalcular_liquidacion(liquidacion)
+        _guardar_items_y_descuentos(liquidacion, request.form)
         db.session.commit()
+
         flash("Liquidación actualizada.", "success")
         return redirect(url_for("liquidaciones.detalle_liquidacion", liquidacion_id=liquidacion.id))
-    viajes = Viaje.query.order_by(Viaje.fecha.desc(), Viaje.id.desc()).all()
+
+    viajes = _viajes_disponibles(liquidacion)
     return render_template("liquidacion_form.html", fleteros=fleteros, viajes=viajes, liquidacion=liquidacion)
 
 
@@ -153,6 +196,9 @@ def editar_liquidacion(liquidacion_id):
 @login_required
 def eliminar_liquidacion(liquidacion_id):
     liquidacion = LiquidacionFletero.query.get_or_404(liquidacion_id)
+    for item in liquidacion.items:
+        if item.viaje:
+            item.viaje.liquidado = False
     db.session.delete(liquidacion)
     db.session.commit()
     flash("Liquidación eliminada.", "success")
