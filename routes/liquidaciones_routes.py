@@ -1,5 +1,3 @@
-[MODIFICADO SOLO EL BLOQUE DE DESCUENTOS PARA QUE NO SE CARGUEN EN CREACION]
-
 # (contenido igual hasta _guardar_items_y_descuentos)
 
 def _guardar_items_y_descuentos(liquidacion, form):
@@ -27,6 +25,6 @@ def _guardar_items_y_descuentos(liquidacion, form):
             )
         )
 
-    # ❌ YA NO SE CARGAN DESCUENTOS EN ESTA ETAPA
+    # YA NO SE CARGAN DESCUENTOS EN ESTA ETAPA
 
     recalcular_liquidacion(liquidacion)
