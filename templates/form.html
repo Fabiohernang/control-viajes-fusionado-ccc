@@ -121,8 +121,8 @@
           <div class="col-md-3">
             <label class="form-label">Socio</label>
             <select id="socio_select" class="form-select" name="socio" required>
-              <option value="si" {% if viaje and viaje.socio %}selected{% endif %}>Sí - comisión 6%</option>
-              <option value="no" {% if not viaje or not viaje.socio %}selected{% endif %}>No - comisión 10%</option>
+              <option value="si" {% if viaje and viaje.socio %}selected{% endif %}>Sí - comisión {{ (socio_rate * 100)|round(2) }}%</option>
+              <option value="no" {% if not viaje or not viaje.socio %}selected{% endif %}>No - comisión {{ (no_socio_rate * 100)|round(2) }}%</option>
             </select>
           </div>
 
@@ -157,20 +157,20 @@
         </div>
 
         <div class="metric-block mb-3">
-          <div class="kpi-label">Total + IVA 21%</div>
+          <div class="kpi-label">Total + IVA <span id="iva_label"></span></div>
           <div class="kpi-money" id="preview_iva">$ 0,00</div>
         </div>
 
         <div class="metric-block mb-3">
           <div class="kpi-label">Comisión cooperativa</div>
           <div class="kpi-money" id="preview_comision">$ 0,00</div>
-          <div class="form-text" id="preview_comision_info">Socio 6% / No socio 10%</div>
+          <div class="form-text" id="preview_comision_info"></div>
         </div>
 
         <div class="metric-block mb-3">
           <div class="kpi-label">Comisión Matías</div>
           <div class="kpi-money" id="preview_matias">$ 0,00</div>
-          <div class="form-text">Se aplica solo si hay factura cliente.</div>
+          <div class="form-text" id="preview_matias_info"></div>
         </div>
 
         {% if viaje %}
@@ -189,6 +189,11 @@
 
 <script>
   const facturaPrefijo = "{{ factura_prefijo or '0007-000' }}";
+  const IVA_RATE = {{ iva_rate|default(0.21) }};
+  const SOCIO_RATE = {{ socio_rate|default(0.06) }};
+  const NO_SOCIO_RATE = {{ no_socio_rate|default(0.10) }};
+  const MATIAS_RATE = {{ matias_rate|default(0.015) }};
+
   const facturaInput = document.getElementById("factura_input");
   const facturaSuffix = document.getElementById("factura_suffix");
   const kmInput = document.getElementById("km_input");
@@ -206,8 +211,10 @@
   const previewComision = document.getElementById("preview_comision");
   const previewComisionInfo = document.getElementById("preview_comision_info");
   const previewMatias = document.getElementById("preview_matias");
+  const previewMatiasInfo = document.getElementById("preview_matias_info");
+  const ivaLabel = document.getElementById("iva_label");
 
-  const MATIAS_RATE = 0.015;
+  function pct(value) { return (value * 100).toFixed(2).replace(/\.00$/, "") + "%"; }
 
   function formatARS(value) {
     return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(value || 0);
@@ -274,17 +281,19 @@
     const tarifa = parseFloat(tarifaInput.value || "0");
     const descuento = parseFloat(descuentoInput.value || "0");
     const total = (tarifa - (tarifa * descuento)) * kg;
-    const totalIva = total * 1.21;
+    const totalIva = total * (1 + IVA_RATE);
     const socio = socioSelect.value === "si";
-    const rate = socio ? 0.06 : 0.10;
+    const rate = socio ? SOCIO_RATE : NO_SOCIO_RATE;
     const comision = totalIva * rate;
     const matias = facturaInput.value ? total * MATIAS_RATE : 0;
 
+    ivaLabel.textContent = pct(IVA_RATE);
     previewTotal.textContent = formatARS(total);
     previewIva.textContent = formatARS(totalIva);
     previewComision.textContent = formatARS(comision);
-    previewComisionInfo.textContent = socio ? "Socio: 6% sobre total + IVA" : "No socio: 10% sobre total + IVA";
+    previewComisionInfo.textContent = socio ? `Socio: ${pct(SOCIO_RATE)} sobre total + IVA` : `No socio: ${pct(NO_SOCIO_RATE)} sobre total + IVA`;
     previewMatias.textContent = formatARS(matias);
+    previewMatiasInfo.textContent = facturaInput.value ? `Matías: ${pct(MATIAS_RATE)} sobre neto` : "No se aplica si no hay factura cliente.";
   }
 
   facturaSuffix.addEventListener("input", syncFactura);
