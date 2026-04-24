@@ -2,156 +2,259 @@
 {% block title %}{{ "Editar viaje" if viaje else "Nuevo viaje" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-  <h1 class="h3 mb-1">{{ "Editar viaje" if viaje else "Nuevo viaje" }}</h1>
-  <p class="text-secondary mb-0">Cargás los datos base y el sistema hace las cuentas solo.</p>
-</div>
+{% set obs_actual = viaje.observaciones if viaje and viaje.observaciones else '' %}
+{% set no_liquidable = no_liquidar_tag is defined and no_liquidar_tag in obs_actual %}
+{% set obs_limpia = obs_actual.replace(no_liquidar_tag, '').strip() if no_liquidar_tag is defined else obs_actual %}
 
-<div class="card shadow-sm">
-  <div class="card-body">
-    <form method="post" class="row g-3">
-      <div class="col-md-3">
-        <label class="form-label">Fecha</label>
-        <input class="form-control" type="date" name="fecha" value="{{ viaje.fecha.isoformat() if viaje else '' }}" required>
-      </div>
-
-      <div class="col-md-5">
-        <label class="form-label">Cliente / Productor</label>
-        <input class="form-control" list="productores_list" type="text" name="cliente" value="{{ viaje.cliente if viaje else '' }}" required>
-        <datalist id="productores_list">
-          {% for nombre in productores %}
-          <option value="{{ nombre }}">
-          {% endfor %}
-        </datalist>
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label">Factura</label>
-        <input class="form-control" type="text" name="factura" value="{{ viaje.factura if viaje and viaje.factura else '' }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label">Fletero</label>
-        <input class="form-control" list="fleteros_list" type="text" name="fletero" value="{{ viaje.fletero if viaje else '' }}" required>
-        <datalist id="fleteros_list">
-          {% for nombre in fleteros %}
-          <option value="{{ nombre }}">
-          {% endfor %}
-        </datalist>
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">Socio</label>
-        <select class="form-select" name="socio" required>
-          <option value="si" {% if viaje and viaje.socio %}selected{% endif %}>Sí</option>
-          <option value="no" {% if not viaje or not viaje.socio %}selected{% endif %}>No</option>
-        </select>
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">CTG</label>
-        <input class="form-control" type="text" name="ctg" value="{{ viaje.ctg if viaje and viaje.ctg else '' }}">
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">Kilómetros</label>
-        <input id="km_input" class="form-control" type="number" step="1" min="1" name="kilometros" value="{{ viaje.kilometros if viaje else '' }}">
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">Origen</label>
-        <input class="form-control" type="text" name="origen" value="{{ viaje.origen if viaje and viaje.origen else '' }}">
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">Destino</label>
-        <input class="form-control" type="text" name="destino" value="{{ viaje.destino if viaje and viaje.destino else '' }}">
-      </div>
-
-      <div class="col-md-4">
-        <label class="form-label">Producto</label>
-        <input class="form-control" type="text" name="producto" value="{{ viaje.producto if viaje and viaje.producto else '' }}">
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">Tarifa</label>
-        <input id="tarifa_input" class="form-control" type="number" step="0.01" min="0" name="tarifa" value="{{ viaje.tarifa if viaje else '' }}" required>
-        <div id="tarifa_info" class="form-text"></div>
-      </div>
-
-      <div class="col-md-3">
-        <label class="form-label">Usar tarifario</label>
-        <select id="usar_tarifario" class="form-select" name="usar_tarifario" required>
-          <option value="si" selected>Sí</option>
-          <option value="no">No</option>
-        </select>
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">Descuento</label>
-        <input class="form-control" type="number" step="0.0001" name="descuento" value="{{ viaje.descuento if viaje else '0' }}" required>
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">KG</label>
-        <input class="form-control" type="number" step="0.0001" name="kg" value="{{ viaje.kg if viaje else '' }}" required>
-      </div>
-
-      <div class="col-md-2">
-        <label class="form-label">Liquidado</label>
-        <select class="form-select" name="liquidado" required>
-          <option value="no" {% if not viaje or not viaje.liquidado %}selected{% endif %}>No</option>
-          <option value="si" {% if viaje and viaje.liquidado %}selected{% endif %}>Sí</option>
-        </select>
-      </div>
-
-      <div class="col-md-10">
-        <label class="form-label">Observaciones</label>
-        <textarea class="form-control" name="observaciones" rows="3">{{ viaje.observaciones if viaje and viaje.observaciones else '' }}</textarea>
-      </div>
-
-      {% if viaje %}
-      <div class="col-12">
-        <div class="alert alert-info mb-0">
-          <strong>Últimos cálculos guardados:</strong>
-          Total {{ viaje.total_importe|ars }} · +IVA {{ viaje.importe_con_iva|ars }} · Comisión {{ viaje.comision|ars }} · Comisión Lucas {{ viaje.comision_lucas|ars }}
-        </div>
-      </div>
-      {% endif %}
-
-      <div class="col-12 d-flex gap-2">
-        <button class="btn btn-primary" type="submit">Guardar</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('main.index') }}">Cancelar</a>
-      </div>
-    </form>
+<div class="hero-panel mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <h1 class="page-title mb-1">{{ "Editar viaje" if viaje else "Nuevo viaje facturado" }}</h1>
+      <p class="text-secondary mb-0">Cargá el viaje cuando ya esté facturado al cliente. El CTG no puede repetirse.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('viajes.viajes') }}">Volver a viajes</a>
   </div>
 </div>
 
+<form method="post" class="row g-4" id="viajeForm">
+  <div class="col-lg-8">
+    <div class="card shadow-sm app-card mb-4">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">1. Factura y cliente</h2>
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Fecha facturación</label>
+            <input class="form-control" type="date" name="fecha" value="{{ viaje.fecha.isoformat() if viaje else '' }}" required>
+          </div>
+
+          <div class="col-md-5">
+            <label class="form-label">Cliente / Productor</label>
+            <input class="form-control" list="productores_list" type="text" name="cliente" value="{{ viaje.cliente if viaje else '' }}" placeholder="Empezá a escribir..." required>
+            <datalist id="productores_list">
+              {% for nombre in productores %}<option value="{{ nombre }}">{% endfor %}
+            </datalist>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Factura cliente</label>
+            <div class="input-group">
+              <span class="input-group-text">0007-000</span>
+              <input id="factura_suffix" class="form-control" type="text" inputmode="numeric" maxlength="5" placeholder="xxxxx">
+            </div>
+            <input id="factura_input" type="hidden" name="factura" value="{{ viaje.factura if viaje and viaje.factura else '' }}">
+            <div class="form-text">Dejala vacía si es un viaje de compensación/sin factura.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm app-card mb-4">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">2. Datos del viaje</h2>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">CTG</label>
+            <input class="form-control" type="text" name="ctg" value="{{ viaje.ctg if viaje and viaje.ctg else '' }}" required>
+            <div class="form-text">Obligatorio y único. Si está repetido, el sistema no guarda.</div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Origen</label>
+            <input class="form-control" type="text" name="origen" value="{{ viaje.origen if viaje and viaje.origen else '' }}">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Destino</label>
+            <input class="form-control" type="text" name="destino" value="{{ viaje.destino if viaje and viaje.destino else '' }}">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Producto</label>
+            <input class="form-control" type="text" name="producto" value="{{ viaje.producto if viaje and viaje.producto else '' }}" placeholder="Ej: MAÍZ, TRIGO, SOJA">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">KG / Toneladas</label>
+            <input id="kg_input" class="form-control" type="number" step="0.0001" name="kg" value="{{ viaje.kg if viaje else '' }}" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Kilómetros</label>
+            <input id="km_input" class="form-control" type="number" step="1" min="1" name="kilometros" value="{{ viaje.kilometros if viaje else '' }}">
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Usar tarifario</label>
+            <select id="usar_tarifario" class="form-select" name="usar_tarifario" required>
+              <option value="si" selected>Sí</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Tarifa</label>
+            <input id="tarifa_input" class="form-control" type="number" step="0.01" min="0" name="tarifa" value="{{ viaje.tarifa if viaje else '' }}" required>
+            <div id="tarifa_info" class="form-text"></div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Descuento</label>
+            <input id="descuento_input" class="form-control" type="number" step="0.0001" name="descuento" value="{{ viaje.descuento if viaje else '0' }}" required>
+            <div class="form-text">Ej: 0.05 = 5%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm app-card">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">3. Fletero y liquidación</h2>
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label">Fletero</label>
+            <input class="form-control" list="fleteros_list" type="text" name="fletero" value="{{ viaje.fletero if viaje else '' }}" placeholder="Empezá a escribir..." required>
+            <datalist id="fleteros_list">
+              {% for nombre in fleteros %}<option value="{{ nombre }}">{% endfor %}
+            </datalist>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Socio</label>
+            <select id="socio_select" class="form-select" name="socio" required>
+              <option value="si" {% if viaje and viaje.socio %}selected{% endif %}>Sí - comisión 6%</option>
+              <option value="no" {% if not viaje or not viaje.socio %}selected{% endif %}>No - comisión 10%</option>
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">¿Liquidar al fletero?</label>
+            <select id="liquidable_select" class="form-select" name="liquidable_fletero" required>
+              <option value="si" {% if not no_liquidable %}selected{% endif %}>Sí, aparece para liquidar</option>
+              <option value="no" {% if no_liquidable %}selected{% endif %}>No, solo control cliente</option>
+            </select>
+            <div class="form-text">Usalo para compensaciones o diferencias cliente/fletero.</div>
+          </div>
+
+          <input type="hidden" name="liquidado" value="{{ 'si' if viaje and viaje.liquidado else 'no' }}">
+
+          <div class="col-12">
+            <label class="form-label">Observaciones</label>
+            <textarea class="form-control" name="observaciones" rows="3">{{ obs_limpia }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card shadow-sm app-card sticky-top" style="top: 1rem;">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">Vista rápida</h2>
+
+        <div class="metric-block mb-3">
+          <div class="kpi-label">Total neto viaje</div>
+          <div class="kpi-money" id="preview_total">$ 0,00</div>
+        </div>
+
+        <div class="metric-block mb-3">
+          <div class="kpi-label">Total + IVA 21%</div>
+          <div class="kpi-money" id="preview_iva">$ 0,00</div>
+        </div>
+
+        <div class="metric-block mb-3">
+          <div class="kpi-label">Comisión cooperativa</div>
+          <div class="kpi-money" id="preview_comision">$ 0,00</div>
+          <div class="form-text" id="preview_comision_info">Socio 6% / No socio 10%</div>
+        </div>
+
+        <div class="metric-block mb-3">
+          <div class="kpi-label">Comisión Matías</div>
+          <div class="kpi-money" id="preview_matias">$ 0,00</div>
+          <div class="form-text">Se aplica solo si hay factura cliente.</div>
+        </div>
+
+        {% if viaje %}
+        <div class="alert alert-info small">
+          Guardado actual:<br>
+          Total {{ viaje.total_importe|ars }} · +IVA {{ viaje.importe_con_iva|ars }} · Comisión {{ viaje.comision|ars }} · Matías {{ viaje.comision_lucas|ars }}
+        </div>
+        {% endif %}
+
+        <button class="btn btn-primary w-100 mb-2" type="submit">Guardar viaje</button>
+        <a class="btn btn-outline-secondary w-100" href="{{ url_for('viajes.viajes') }}">Cancelar</a>
+      </div>
+    </div>
+  </div>
+</form>
+
 <script>
+  const facturaPrefijo = "{{ factura_prefijo or '0007-000' }}";
+  const facturaInput = document.getElementById("factura_input");
+  const facturaSuffix = document.getElementById("factura_suffix");
   const kmInput = document.getElementById("km_input");
+  const kgInput = document.getElementById("kg_input");
   const tarifaInput = document.getElementById("tarifa_input");
+  const descuentoInput = document.getElementById("descuento_input");
   const usarTarifario = document.getElementById("usar_tarifario");
   const tarifaInfo = document.getElementById("tarifa_info");
+  const socioSelect = document.getElementById("socio_select");
+  const liquidableSelect = document.getElementById("liquidable_select");
+  const form = document.getElementById("viajeForm");
+
+  const previewTotal = document.getElementById("preview_total");
+  const previewIva = document.getElementById("preview_iva");
+  const previewComision = document.getElementById("preview_comision");
+  const previewComisionInfo = document.getElementById("preview_comision_info");
+  const previewMatias = document.getElementById("preview_matias");
+
+  const MATIAS_RATE = 0.015;
+
+  function formatARS(value) {
+    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(value || 0);
+  }
+
+  function initFactura() {
+    const actual = facturaInput.value || "";
+    if (actual.startsWith(facturaPrefijo)) {
+      facturaSuffix.value = actual.replace(facturaPrefijo, "");
+    } else if (actual) {
+      facturaSuffix.value = actual;
+    }
+    syncFactura();
+  }
+
+  function syncFactura() {
+    const raw = (facturaSuffix.value || "").trim();
+    if (!raw) {
+      facturaInput.value = "";
+      recalcularPreview();
+      return;
+    }
+    if (raw.includes("-")) {
+      facturaInput.value = raw;
+    } else {
+      facturaInput.value = facturaPrefijo + raw.padStart(5, "0");
+    }
+    recalcularPreview();
+  }
 
   async function completarTarifa() {
     const km = kmInput.value.trim();
     const usar = usarTarifario.value === "si";
-
     if (!usar) {
       tarifaInfo.textContent = "Tarifario desactivado. La tarifa se carga manual.";
+      recalcularPreview();
       return;
     }
-
     if (!km) {
       tarifaInput.value = "";
       tarifaInfo.textContent = "";
+      recalcularPreview();
       return;
     }
-
     try {
       const res = await fetch(`/api/tarifa?km=${encodeURIComponent(km)}`);
       const data = await res.json();
-
       if (data.tarifa !== null && data.tarifa !== undefined) {
         tarifaInput.value = Number(data.tarifa).toFixed(2);
         tarifaInfo.textContent = `Tarifa tomada del tarifario para km ${data.km_encontrado}.`;
@@ -163,16 +266,42 @@
       console.error("Error buscando tarifa:", err);
       tarifaInfo.textContent = "Error al buscar la tarifa.";
     }
+    recalcularPreview();
   }
 
+  function recalcularPreview() {
+    const kg = parseFloat(kgInput.value || "0");
+    const tarifa = parseFloat(tarifaInput.value || "0");
+    const descuento = parseFloat(descuentoInput.value || "0");
+    const total = (tarifa - (tarifa * descuento)) * kg;
+    const totalIva = total * 1.21;
+    const socio = socioSelect.value === "si";
+    const rate = socio ? 0.06 : 0.10;
+    const comision = totalIva * rate;
+    const matias = facturaInput.value ? total * MATIAS_RATE : 0;
+
+    previewTotal.textContent = formatARS(total);
+    previewIva.textContent = formatARS(totalIva);
+    previewComision.textContent = formatARS(comision);
+    previewComisionInfo.textContent = socio ? "Socio: 6% sobre total + IVA" : "No socio: 10% sobre total + IVA";
+    previewMatias.textContent = formatARS(matias);
+  }
+
+  facturaSuffix.addEventListener("input", syncFactura);
   kmInput.addEventListener("input", completarTarifa);
   kmInput.addEventListener("change", completarTarifa);
   usarTarifario.addEventListener("change", completarTarifa);
+  [kgInput, tarifaInput, descuentoInput, socioSelect, liquidableSelect].forEach(el => {
+    el.addEventListener("input", recalcularPreview);
+    el.addEventListener("change", recalcularPreview);
+  });
+
+  form.addEventListener("submit", syncFactura);
 
   window.addEventListener("load", () => {
-    if (kmInput.value && usarTarifario.value === "si") {
-      completarTarifa();
-    }
+    initFactura();
+    if (kmInput.value && usarTarifario.value === "si") completarTarifa();
+    recalcularPreview();
   });
 </script>
 {% endblock %}
