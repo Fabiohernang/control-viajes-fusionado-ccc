@@ -1,70 +1,151 @@
 {% extends "base.html" %}
-{% block title %}Nueva liquidación{% endblock %}
+{% block title %}{% if liquidacion %}Editar liquidación{% else %}Nueva liquidación{% endif %}{% endblock %}
 
 {% block content %}
-<h2>Liquidación de fletero</h2>
+{% set seleccionados = liquidacion.items|map(attribute='viaje_id')|list if liquidacion else [] %}
 
-<form method="post">
+<div class="hero-panel mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 w-100">
+    <div>
+      <h1 class="page-title mb-1">{% if liquidacion %}Editar liquidación{% else %}Nueva liquidación{% endif %}</h1>
+      <div class="text-secondary">Seleccioná el fletero y marcá los viajes que entran en esta liquidación.</div>
+    </div>
+    <a href="{{ url_for('liquidaciones.liquidaciones') }}" class="btn btn-outline-secondary">Volver</a>
+  </div>
+</div>
 
-Fletero: <input name="fletero" id="fletero"><br>
-Fecha: <input type="date" name="fecha"><br>
+<form method="post" class="row g-4" id="liqForm">
+  <div class="col-12">
+    <div class="card app-card shadow-sm">
+      <div class="card-body p-4">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">Fecha</label>
+            <input class="form-control" type="date" name="fecha" value="{{ liquidacion.fecha.strftime('%Y-%m-%d') if liquidacion else '' }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Fletero</label>
+            <input class="form-control" name="fletero" id="fletero" list="fleteros_list" value="{{ liquidacion.fletero if liquidacion else '' }}" required placeholder="Empezá a escribir el fletero...">
+            <datalist id="fleteros_list">
+              {% for f in fleteros %}<option value="{{ f }}">{% endfor %}
+            </datalist>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Factura fletero</label>
+            <input class="form-control" name="factura_fletero" value="{{ liquidacion.factura_fletero if liquidacion else '' }}" placeholder="Opcional, se puede completar después">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Observaciones</label>
+            <textarea class="form-control" name="observaciones" rows="2">{{ liquidacion.observaciones if liquidacion else '' }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<input id="buscar" placeholder="buscar cliente / ctg">
-<button type="button" onclick="filtrarFletero()">solo fletero</button>
+  <div class="col-lg-8">
+    <div class="card app-card shadow-sm">
+      <div class="card-body p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+          <div>
+            <h2 class="h5 mb-1">Viajes disponibles</h2>
+            <div class="text-secondary small">No aparecen viajes marcados como “no liquidar” ni viajes ya liquidados.</div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <input id="buscar" class="form-control form-control-sm" style="min-width:230px" placeholder="Buscar cliente / CTG / factura">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFiltrarFletero">Solo fletero</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnMarcarVisibles">Marcar visibles</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiar">Limpiar</button>
+          </div>
+        </div>
 
-<table border="1">
-<tr>
-<th></th><th>CTG</th><th>Cliente</th><th>Origen</th><th>Destino</th><th>Kg</th><th>Tarifa</th><th>Total</th>
-</tr>
-{% for v in viajes %}
-<tr class="fila" data-fletero="{{v.fletero}}" data-texto="{{v.cliente}} {{v.ctg}}">
-<td><input type="checkbox" name="viaje_ids" value="{{v.id}}" data-importe="{{v.importe_con_iva}}"></td>
-<td>{{v.ctg}}</td>
-<td>{{v.cliente}}</td>
-<td>{{v.origen}}</td>
-<td>{{v.destino}}</td>
-<td>{{v.kg}}</td>
-<td>{{v.tarifa}}</td>
-<td>{{v.importe_con_iva}}</td>
-</tr>
-{% endfor %}
-</table>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 admin-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Fecha</th>
+                <th>CTG</th>
+                <th>Cliente</th>
+                <th>Factura</th>
+                <th>Origen</th>
+                <th>Destino</th>
+                <th class="text-end">Kg</th>
+                <th class="text-end">Tarifa</th>
+                <th class="text-end">Total + IVA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in viajes %}
+              <tr class="fila-viaje" data-fletero="{{ v.fletero|lower }}" data-texto="{{ (v.cliente ~ ' ' ~ (v.ctg or '') ~ ' ' ~ (v.factura or '') ~ ' ' ~ (v.origen or '') ~ ' ' ~ (v.destino or ''))|lower }}">
+                <td><input class="form-check-input viaje-check" type="checkbox" name="viaje_ids" value="{{ v.id }}" data-importe="{{ v.importe_con_iva }}" {% if v.id in seleccionados %}checked{% endif %}></td>
+                <td>{{ v.fecha.strftime('%d/%m/%Y') }}</td>
+                <td>{{ v.ctg or '-' }}</td>
+                <td><strong>{{ v.cliente }}</strong></td>
+                <td>{{ v.factura or '-' }}</td>
+                <td>{{ v.origen or '-' }}</td>
+                <td>{{ v.destino or '-' }}</td>
+                <td class="text-end">{{ v.kg }}</td>
+                <td class="text-end">{{ v.tarifa|ars }}</td>
+                <td class="text-end amount-cell amount-strong">{{ v.importe_con_iva|ars }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="10" class="text-center text-secondary py-4">No hay viajes disponibles para liquidar.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<h3>Ajustes</h3>
-Comision <input id="comision" name="comision_manual"><br>
-Combustible <input name="combustible"><br>
-IIBB <input name="retencion_iibb"><br>
-Percepciones <input name="percepciones_comision"><br>
-
-<h3>Total: <span id="total">0</span></h3>
-
-<button>Guardar</button>
+  <div class="col-lg-4">
+    <div class="card app-card shadow-sm sticky-top" style="top:1rem;">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-3">Resumen</h2>
+        <div class="metric-block mb-2">
+          <div class="kpi-label">Viajes seleccionados</div>
+          <div class="kpi-value" id="cant">0</div>
+        </div>
+        <div class="metric-block mb-3">
+          <div class="kpi-label">Total liquidación</div>
+          <div class="kpi-money" id="total">$ 0,00</div>
+        </div>
+        <div class="alert alert-info small">Los descuentos, adelantos, combustible, percepciones, cuotas y seguros se cargan después desde <b>Registrar pago</b>.</div>
+        <button class="btn btn-primary w-100 mb-2" type="submit">Guardar liquidación</button>
+        <a class="btn btn-outline-secondary w-100" href="{{ url_for('liquidaciones.liquidaciones') }}">Cancelar</a>
+      </div>
+    </div>
+  </div>
 </form>
 
 <script>
-let filas = document.querySelectorAll('.fila');
-let buscar = document.getElementById('buscar');
-
-buscar.oninput = ()=>{
- let val = buscar.value.toLowerCase();
- filas.forEach(f=>{
-  f.style.display = f.dataset.texto.toLowerCase().includes(val)?'':'none';
- });
+const fletero = document.getElementById('fletero');
+const buscar = document.getElementById('buscar');
+const filas = document.querySelectorAll('.fila-viaje');
+const checks = document.querySelectorAll('.viaje-check');
+function ars(v){return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(v||0)}
+function visible(row){return row.style.display !== 'none'}
+function filtrar(soloFletero=false){
+  const q=(buscar.value||'').toLowerCase().trim();
+  const f=(fletero.value||'').toLowerCase().trim();
+  filas.forEach(row=>{
+    const okTexto=!q || row.dataset.texto.includes(q);
+    const okFletero=!soloFletero || !f || row.dataset.fletero===f;
+    row.style.display=(okTexto && okFletero)?'':'none';
+  });
 }
-
-function filtrarFletero(){
- let f = document.getElementById('fletero').value.toLowerCase();
- filas.forEach(row=>{
-  row.style.display = row.dataset.fletero.toLowerCase()==f?'':'none';
- });
+function recalcular(){
+  let total=0,cant=0;
+  checks.forEach(c=>{if(c.checked){total+=parseFloat(c.dataset.importe||0);cant++;}});
+  document.getElementById('cant').innerText=cant;
+  document.getElementById('total').innerText=ars(total);
 }
-
-let checks = document.querySelectorAll('input[type=checkbox]');
-checks.forEach(c=>c.onchange = ()=>{
- let t=0;
- checks.forEach(x=>{ if(x.checked) t+=parseFloat(x.dataset.importe||0); });
- document.getElementById('total').innerText=t;
-});
+buscar.addEventListener('input',()=>filtrar(false));
+document.getElementById('btnFiltrarFletero').addEventListener('click',()=>filtrar(true));
+document.getElementById('btnMarcarVisibles').addEventListener('click',()=>{filas.forEach(r=>{if(visible(r))r.querySelector('.viaje-check').checked=true});recalcular();});
+document.getElementById('btnLimpiar').addEventListener('click',()=>{checks.forEach(c=>c.checked=false);recalcular();});
+checks.forEach(c=>c.addEventListener('change',recalcular));
+recalcular();
 </script>
-
 {% endblock %}
