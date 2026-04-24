@@ -9,6 +9,9 @@
     <div class="module-subtitle">Fecha {{ liquidacion.fecha.strftime('%d/%m/%Y') }}</div>
   </div>
   <div class="module-header-actions">
+    <a href="{{ url_for('liquidaciones.orden_pago_liquidacion', liquidacion_id=liquidacion.id) }}" target="_blank" class="btn btn-sm btn-success">
+  Orden de pago
+    </a>
     <a href="{{ url_for('liquidaciones.recibo_liquidacion', liquidacion_id=liquidacion.id) }}" target="_blank" class="btn btn-sm btn-dark">
       <i class="bi bi-printer me-1"></i> Recibo / impresión
     </a>
