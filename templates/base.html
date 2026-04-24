@@ -17,7 +17,6 @@
     'url': url_for('viajes.viajes'),
     'links': [
       ('viajes.viajes', 'Viajes'),
-      ('facturas.importar_factura_pdf', 'Importar factura'),
       ('viajes.nuevo_viaje', 'Nuevo viaje'),
       ('facturas.facturas', 'Facturas')
     ]
@@ -29,8 +28,8 @@
     'url': url_for('liquidaciones.liquidaciones'),
     'links': [
       ('liquidaciones.liquidaciones', 'Liquidaciones'),
-      ('liquidaciones.buscar_pagos_fleteros', 'Buscar pagos'),
-      ('liquidaciones.importar_liquidacion_pdf', 'Importar liquidación')
+      ('liquidaciones.nueva_liquidacion', 'Nueva liquidación'),
+      ('liquidaciones.buscar_pagos_fleteros', 'Buscar pagos')
     ]
   },
   {
@@ -56,9 +55,9 @@
 ] %}
 
 {% set active_group = 'inicio' %}
-{% if endpoint in ['viajes.viajes', 'facturas.facturas', 'facturas.detalle_factura', 'facturas.editar_percepciones', 'facturas.importar_factura_pdf', 'facturas.confirmar_importacion_factura_pdf', 'facturas.cancelar_importacion_factura_pdf', 'viajes.nuevo_viaje', 'viajes.editar_viaje'] %}
+{% if endpoint in ['viajes.viajes', 'facturas.facturas', 'facturas.detalle_factura', 'facturas.editar_percepciones', 'viajes.nuevo_viaje', 'viajes.editar_viaje'] %}
   {% set active_group = 'operacion' %}
-{% elif endpoint in ['liquidaciones.liquidaciones', 'liquidaciones.nueva_liquidacion', 'liquidaciones.editar_liquidacion', 'liquidaciones.detalle_liquidacion', 'liquidaciones.pagar_liquidacion', 'liquidaciones.buscar_pagos_fleteros', 'liquidaciones.editar_pago_liquidacion', 'liquidaciones.eliminar_pago_liquidacion', 'liquidaciones.recibo_liquidacion', 'liquidaciones.importar_liquidacion_pdf'] %}
+{% elif endpoint in ['liquidaciones.liquidaciones', 'liquidaciones.nueva_liquidacion', 'liquidaciones.editar_liquidacion', 'liquidaciones.detalle_liquidacion', 'liquidaciones.pagar_liquidacion', 'liquidaciones.buscar_pagos_fleteros', 'liquidaciones.editar_pago_liquidacion', 'liquidaciones.eliminar_pago_liquidacion', 'liquidaciones.recibo_liquidacion'] %}
   {% set active_group = 'fleteros' %}
 {% elif endpoint in ['facturas.cobranzas', 'pagos.pagos', 'pagos.nuevo_pago', 'pagos.editar_pago', 'pagos.caja', 'pagos.cuotas_seguros'] %}
   {% set active_group = 'cobranzas' %}
@@ -162,7 +161,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // ── CSRF: inyectar token en todos los formularios POST automáticamente ──
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
   if (csrfToken) {
     document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(form => {
@@ -176,7 +174,6 @@
     });
   }
 
-  // ── Flashes: auto-dismiss después de 4 segundos ──
   document.querySelectorAll('.alert.alert-dismissible').forEach(alert => {
     setTimeout(() => {
       const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
@@ -184,7 +181,6 @@
     }, 4000);
   });
 
-  // ── Eliminar: pedir confirmación antes de borrar ──
   document.querySelectorAll('[data-confirm]').forEach(btn => {
     btn.addEventListener('click', e => {
       if (!confirm(btn.dataset.confirm)) e.preventDefault();
